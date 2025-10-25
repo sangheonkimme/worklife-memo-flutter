@@ -12,12 +12,12 @@
 
 | 단계 | 기간 | 진행률 | 상태 |
 |------|------|--------|------|
-| Phase 1: 기초 구축 | 2주 | 0% | 🔴 시작 전 |
+| Phase 1: 기초 구축 | 2주 | 50% | 🟡 진행 중 |
 | Phase 2: 핵심 기능 | 5주 | 0% | 🔴 시작 전 |
 | Phase 3: 고급 기능 | 3주 | 0% | 🔴 시작 전 |
 | Phase 4: 최적화 및 출시 | 2주 | 0% | 🔴 시작 전 |
 
-**전체 진행률**: 0%
+**전체 진행률**: 10%
 
 ---
 
@@ -26,49 +26,49 @@
 ### Week 1: 프로젝트 설정 및 개발 환경
 
 #### 🛠️ 개발 환경 설정
-- [ ] Flutter SDK 설치 (최신 stable 버전)
+- [x] Flutter SDK 설치 (최신 stable 버전)
   ```bash
   # macOS
   brew install flutter
   # 또는 https://flutter.dev/docs/get-started/install
   ```
-- [ ] Flutter Doctor 실행 및 검증
+- [x] Flutter Doctor 실행 및 검증
   ```bash
   flutter doctor -v
   ```
-- [ ] IDE 설정
-  - [ ] Android Studio 설치
-    - [ ] Flutter 플러그인
-    - [ ] Dart 플러그인
-  - [ ] VSCode 설치 (선택)
-    - [ ] Flutter 확장
-    - [ ] Dart 확장
-- [ ] Android 환경 설정
-  - [ ] Android SDK 설치
-  - [ ] Android Studio 에뮬레이터
-  - [ ] Android 라이선스 동의
+- [x] IDE 설정
+  - [x] Android Studio 설치
+    - [x] Flutter 플러그인
+    - [x] Dart 플러그인
+  - [x] VSCode 설치 (선택)
+    - [x] Flutter 확장
+    - [x] Dart 확장
+- [x] Android 환경 설정
+  - [x] Android SDK 설치
+  - [x] Android Studio 에뮬레이터
+  - [x] Android 라이선스 동의
     ```bash
     flutter doctor --android-licenses
     ```
-- [ ] iOS 환경 설정 (Mac)
-  - [ ] Xcode 설치
-  - [ ] Xcode Command Line Tools
-  - [ ] CocoaPods 설치
+- [x] iOS 환경 설정 (Mac)
+  - [x] Xcode 설치
+  - [x] Xcode Command Line Tools
+  - [x] CocoaPods 설치
     ```bash
     sudo gem install cocoapods
     ```
-  - [ ] iOS 시뮬레이터 설정
-- [ ] 디버깅 도구
-  - [ ] Flutter DevTools
-  - [ ] Dart DevTools
+  - [x] iOS 시뮬레이터 설정
+- [x] 디버깅 도구
+  - [x] Flutter DevTools
+  - [x] Dart DevTools
 
 #### 📁 프로젝트 생성
-- [ ] Flutter 프로젝트 생성
+- [x] Flutter 프로젝트 생성
   ```bash
   flutter create worklife_notes_app --org com.yourcompany
   cd worklife_notes_app
   ```
-- [ ] 프로젝트 폴더 구조 생성
+- [x] 프로젝트 폴더 구조 생성
   ```
   lib/
   ├── core/
@@ -91,15 +91,15 @@
   │   └── blocs/          # BLoC (선택)
   └── main.dart
   ```
-- [ ] pubspec.yaml 설정
-  - [ ] 앱 이름 및 설명
-  - [ ] 버전 정보
-  - [ ] 최소 SDK 버전
-- [ ] Git 저장소 초기화
-- [ ] .gitignore 설정
+- [x] pubspec.yaml 설정
+  - [x] 앱 이름 및 설명
+  - [x] 버전 정보
+  - [x] 최소 SDK 버전
+- [x] Git 저장소 초기화
+- [x] .gitignore 설정
 
 #### 📦 핵심 패키지 설치
-- [ ] 상태 관리
+- [x] 상태 관리
   ```yaml
   dependencies:
     # Riverpod (권장) 또는 Provider
@@ -107,12 +107,12 @@
     # 또는
     # provider: ^6.1.0
   ```
-- [ ] 네비게이션
+- [x] 네비게이션
   ```yaml
   dependencies:
     go_router: ^12.1.0
   ```
-- [ ] UI 라이브러리
+- [x] UI 라이브러리
   ```yaml
   dependencies:
     flutter_screenutil: ^5.9.0  # 반응형 UI
@@ -120,7 +120,7 @@
     cached_network_image: ^3.3.0 # 이미지 캐싱
     shimmer: ^3.0.0              # 스켈레톤 로딩
   ```
-- [ ] HTTP 클라이언트
+- [x] HTTP 클라이언트
   ```yaml
   dependencies:
     dio: ^5.4.0                  # HTTP 클라이언트
@@ -129,7 +129,7 @@
     retrofit_generator: ^7.0.0
     build_runner: ^2.4.0
   ```
-- [ ] 로컬 스토리지
+- [x] 로컬 스토리지
   ```yaml
   dependencies:
     flutter_secure_storage: ^9.0.0  # 보안 저장소
@@ -143,7 +143,7 @@
     # 또는
     isar_generator: ^3.1.0
   ```
-- [ ] 유틸리티
+- [x] 유틸리티
   ```yaml
   dependencies:
     intl: ^0.18.1                # 국제화 및 날짜 포맷
