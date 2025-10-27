@@ -2,9 +2,9 @@
 
 **프로젝트 기간**: 14주
 **시작일**: 2025-01-27
-**상태**: Phase 1 Week 1 완료 ✅ (진행 중)
+**상태**: Phase 1 Week 2 완료 ✅ (진행 중)
 **개발 전략**: 오프라인 우선 (Offline-First) → API 연동
-**완료된 Week**: 1/14
+**완료된 Week**: 2/14
 
 ---
 
@@ -53,51 +53,54 @@
 
 ---
 
-### Week 2: 로컬 데이터베이스 구현 (Offline-First)
+### Week 2: 로컬 데이터베이스 구현 (Offline-First) ✅
 
 #### Isar 데이터베이스 설정
-- [ ] Isar 스키마 정의
-  - [ ] NoteEntity (id, uuid, title, content, type, createdAt, updatedAt)
-  - [ ] FolderEntity (id, name, parentId, createdAt)
-  - [ ] TagEntity (id, name, color, createdAt)
-  - [ ] ChecklistItemEntity (id, noteId, text, isCompleted, order)
-- [ ] Isar 데이터베이스 초기화
-- [ ] 인덱스 설정
-  - [ ] 제목 검색 인덱스
-  - [ ] 날짜 정렬 인덱스
-  - [ ] UUID 고유 인덱스
+- [x] Isar 스키마 정의
+  - [x] NoteEntity (id, uuid, title, content, type, createdAt, updatedAt)
+  - [x] FolderEntity (id, name, parentId, createdAt)
+  - [x] TagEntity (id, name, color, createdAt)
+  - [x] ChecklistItemEntity (id, noteId, text, isCompleted, order)
+- [x] Isar 데이터베이스 초기화
+- [x] 인덱스 설정
+  - [x] 제목 검색 인덱스
+  - [x] 날짜 정렬 인덱스
+  - [x] UUID 고유 인덱스
 
 #### 로컬 데이터 소스 구현
-- [ ] note_local_datasource.dart
-  - [ ] Create (메모 생성)
-  - [ ] Read (단일/목록/검색)
-  - [ ] Update (메모 수정)
-  - [ ] Delete (삭제/복구)
-- [ ] folder_local_datasource.dart
-  - [ ] 폴더 CRUD
-  - [ ] 폴더 트리 조회
-- [ ] tag_local_datasource.dart
-  - [ ] 태그 CRUD
-  - [ ] 태그 자동완성
+- [x] note_local_datasource.dart
+  - [x] Create (메모 생성)
+  - [x] Read (단일/목록/검색)
+  - [x] Update (메모 수정)
+  - [x] Delete (삭제/복구)
+- [x] folder_local_datasource.dart
+  - [x] 폴더 CRUD
+  - [x] 폴더 트리 조회
+- [x] tag_local_datasource.dart
+  - [x] 태그 CRUD
+  - [x] 태그 자동완성
+- [x] checklist_item_local_datasource.dart
+  - [x] 체크리스트 CRUD
+  - [x] 완료/미완료 필터링
 
 #### Domain Layer 구현
-- [ ] Entity 정의
-  - [ ] note.dart
-  - [ ] folder.dart
-  - [ ] tag.dart
-  - [ ] checklist_item.dart
-- [ ] Repository Interface
-  - [ ] note_repository.dart
-  - [ ] folder_repository.dart
-  - [ ] tag_repository.dart
+- [x] Entity 정의
+  - [x] note.dart
+  - [x] folder.dart
+  - [x] tag.dart
+  - [x] checklist_item.dart
+- [x] Repository Interface
+  - [x] note_repository.dart
+  - [x] folder_repository.dart
+  - [x] tag_repository.dart
 
 #### Data Layer 구현
-- [ ] Repository 구현 (로컬 전용)
-  - [ ] note_repository_impl.dart
-  - [ ] folder_repository_impl.dart
-  - [ ] tag_repository_impl.dart
-- [ ] 에러 처리 로직
-- [ ] Code generation 실행 (build_runner)
+- [x] Repository 구현 (로컬 전용)
+  - [x] note_repository_impl.dart
+  - [x] folder_repository_impl.dart
+  - [x] tag_repository_impl.dart
+- [x] 에러 처리 로직
+- [x] Code generation 실행 (build_runner)
 
 ---
 
