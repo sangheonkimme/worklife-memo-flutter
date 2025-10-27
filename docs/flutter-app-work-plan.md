@@ -2,9 +2,9 @@
 
 **프로젝트 기간**: 14주
 **시작일**: 2025-01-27
-**상태**: Phase 1 Week 2 완료 ✅ (진행 중)
+**상태**: Phase 1 Week 3 완료 ✅ (진행 중)
 **개발 전략**: 오프라인 우선 (Offline-First) → API 연동
-**완료된 Week**: 2/14
+**완료된 Week**: 3/14
 
 ---
 
@@ -104,35 +104,35 @@
 
 ---
 
-### Week 3: 기본 UI 컴포넌트 및 네비게이션
+### Week 3: 기본 UI 컴포넌트 및 네비게이션 ✅
 
 #### 네비게이션 설정
-- [ ] go_router 설정
-- [ ] 라우트 정의
-  - [ ] Splash 화면
-  - [ ] 홈 화면 (메모 목록)
-  - [ ] 메모 에디터
-  - [ ] 검색 화면
-  - [ ] 설정 화면
-- [ ] 딥링크 설정 (iOS/Android - 기본)
+- [x] go_router 설정
+- [x] 라우트 정의
+  - [x] Splash 화면
+  - [x] 홈 화면 (메모 목록)
+  - [x] 메모 에디터 (라우트 준비 완료, Week 4에서 구현)
+  - [x] 검색 화면 (라우트 준비 완료, Week 7에서 구현)
+  - [x] 설정 화면
+- [x] 딥링크 설정 (iOS/Android - go_router가 자동 지원)
 
 #### 기본 화면 구현
-- [ ] Splash 화면
-  - [ ] 로딩 애니메이션
-  - [ ] 앱 초기화 (Isar DB 초기화)
-- [ ] 홈 화면 레이아웃
-  - [ ] Bottom Navigation Bar
-  - [ ] App Bar with search
-  - [ ] Drawer (폴더 트리)
-  - [ ] FAB (새 메모 작성)
+- [x] Splash 화면
+  - [x] 로딩 애니메이션
+  - [x] 앱 초기화 (Isar DB 초기화)
+- [x] 홈 화면 레이아웃
+  - [x] Bottom Navigation Bar (4개 탭)
+  - [x] App Bar with search
+  - [x] Drawer (폴더 트리 - 구조 완료, 실제 데이터는 Week 6)
+  - [x] FAB (새 메모 작성)
 
 #### 공통 위젯
-- [ ] 로딩 인디케이터
-- [ ] 에러 위젯
-- [ ] 빈 상태 위젯
-- [ ] Shimmer 로딩 효과
-- [ ] 다이얼로그 컴포넌트
-- [ ] 스낵바 유틸리티
+- [x] 로딩 인디케이터 (AppLoadingIndicator, AppSmallLoadingIndicator)
+- [x] 에러 위젯 (AppErrorWidget + factory methods)
+- [x] 빈 상태 위젯 (AppEmptyWidget + factory methods)
+- [x] Shimmer 로딩 효과 (NoteCardShimmer, FolderItemShimmer 등)
+- [x] 다이얼로그 컴포넌트 (AppDialog + extension methods)
+- [x] 스낵바 유틸리티 (BuildContext extension)
 
 ---
 
