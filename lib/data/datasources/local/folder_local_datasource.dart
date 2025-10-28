@@ -1,7 +1,9 @@
 import 'package:uuid/uuid.dart';
 import '../../../domain/entities/folder.dart';
 import 'isar_database.dart';
+import 'entities/note_entity.dart';
 import 'entities/folder_entity.dart';
+import 'package:isar/isar.dart';
 
 /// 폴더 Local Data Source
 class FolderLocalDataSource {
@@ -45,10 +47,7 @@ class FolderLocalDataSource {
   /// 모든 폴더 조회
   Future<List<Folder>> getAllFolders() async {
     final isar = await IsarDatabase.getInstance();
-    final entities = await isar.folderEntitys
-        .where()
-        .sortByOrder()
-        .findAll();
+    final entities = await isar.folderEntitys.where().sortByOrder().findAll();
 
     return entities.map(_mapToFolder).toList();
   }
@@ -80,10 +79,7 @@ class FolderLocalDataSource {
   /// 폴더 트리 조회 (계층 구조)
   Future<Map<String, List<Folder>>> getFolderTree() async {
     final isar = await IsarDatabase.getInstance();
-    final allFolders = await isar.folderEntitys
-        .where()
-        .sortByOrder()
-        .findAll();
+    final allFolders = await isar.folderEntitys.where().sortByOrder().findAll();
 
     final tree = <String, List<Folder>>{};
 

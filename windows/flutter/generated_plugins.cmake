@@ -3,9 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  irondash_engine_context
+  file_selector_windows
   isar_flutter_libs
-  super_native_extensions
   url_launcher_windows
 )
 

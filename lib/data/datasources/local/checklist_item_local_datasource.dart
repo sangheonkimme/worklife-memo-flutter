@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 import '../../../domain/entities/checklist_item.dart';
 import 'isar_database.dart';
 import 'entities/checklist_item_entity.dart';
+import 'package:isar/isar.dart';
 
 /// 체크리스트 항목 Local Data Source
 class ChecklistItemLocalDataSource {

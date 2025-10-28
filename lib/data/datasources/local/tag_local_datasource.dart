@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 import '../../../domain/entities/tag.dart';
 import 'isar_database.dart';
 import 'entities/tag_entity.dart';
+import 'package:isar/isar.dart';
 
 /// 태그 Local Data Source
 class TagLocalDataSource {
@@ -28,10 +29,7 @@ class TagLocalDataSource {
   /// 태그 조회 (단일)
   Future<Tag?> getTagById(String id) async {
     final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
+    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
 
     if (entity == null) return null;
 
@@ -42,10 +40,7 @@ class TagLocalDataSource {
   /// 이름으로 태그 조회
   Future<Tag?> getTagByName(String name) async {
     final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys
-        .filter()
-        .nameEqualTo(name)
-        .findFirst();
+    final entity = await isar.tagEntitys.filter().nameEqualTo(name).findFirst();
 
     if (entity == null) return null;
 
@@ -56,10 +51,7 @@ class TagLocalDataSource {
   /// 모든 태그 조회
   Future<List<Tag>> getAllTags() async {
     final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys
-        .where()
-        .sortByName()
-        .findAll();
+    final entities = await isar.tagEntitys.where().sortByName().findAll();
 
     return entities.map(_mapToTag).toList();
   }
@@ -128,10 +120,7 @@ class TagLocalDataSource {
   /// 태그 삭제
   Future<void> deleteTag(String id) async {
     final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
+    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
 
     if (entity == null) return;
 
@@ -151,10 +140,7 @@ class TagLocalDataSource {
   /// 태그 이름 변경
   Future<void> renameTag(String id, String newName) async {
     final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
+    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
 
     if (entity == null) return;
 
@@ -169,10 +155,7 @@ class TagLocalDataSource {
   /// 태그 색상 변경
   Future<void> changeTagColor(String id, String newColor) async {
     final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
+    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
 
     if (entity == null) return;
 

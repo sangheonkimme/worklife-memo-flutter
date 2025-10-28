@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'folder.dart';
 import 'tag.dart';
 
@@ -72,6 +74,38 @@ extension NoteX on Note {
   /// 메모 미리보기 텍스트 (최대 200자)
   String get preview {
     if (content.isEmpty) return '';
-    return content.length > 200 ? '${content.substring(0, 200)}...' : content;
+
+    String plainText;
+    switch (type) {
+      case NoteType.richText:
+        // Delta JSON → Document → Plain Text
+        try {
+          final jsonData = jsonDecode(content);
+          final document = quill.Document.fromJson(jsonData);
+          plainText = document.toPlainText().trim();
+        } catch (e) {
+          plainText = content;
+        }
+        break;
+      case NoteType.checklist:
+        // JSON 파싱하여 텍스트 추출
+        try {
+          final List<dynamic> items = jsonDecode(content) as List;
+          plainText = items
+              .map((item) => item['text'] as String? ?? '')
+              .where((text) => text.isNotEmpty)
+              .join(', ');
+        } catch (e) {
+          plainText = content;
+        }
+        break;
+      case NoteType.markdown:
+        plainText = content;
+        break;
+    }
+
+    return plainText.length > 200
+        ? '${plainText.substring(0, 200)}...'
+        : plainText;
   }
 }

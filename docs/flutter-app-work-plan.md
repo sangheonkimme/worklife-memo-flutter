@@ -2,9 +2,9 @@
 
 **프로젝트 기간**: 14주
 **시작일**: 2025-01-27
-**상태**: Phase 1 Week 3 완료 ✅ (진행 중)
+**상태**: Phase 2 Week 4-5 완료 ✅ (진행 중)
 **개발 전략**: 오프라인 우선 (Offline-First) → API 연동
-**완료된 Week**: 3/14
+**완료된 Week**: 5/14
 
 ---
 
@@ -138,57 +138,57 @@
 
 ## Phase 2: 핵심 기능 - 오프라인 완성 (5주)
 
-### Week 4-5: 메모 CRUD 및 에디터
+### Week 4-5: 메모 CRUD 및 에디터 ✅
 
 #### UseCase 구현 (비즈니스 로직)
-- [ ] create_note.dart
-- [ ] update_note.dart
-- [ ] delete_note.dart
-- [ ] get_notes.dart
-- [ ] get_note_by_id.dart
-- [ ] pin_note.dart
-- [ ] archive_note.dart
+- [x] create_note.dart
+- [x] update_note.dart
+- [x] delete_note.dart
+- [x] get_notes.dart
+- [x] get_note_by_id.dart
+- [x] pin_note.dart
+- [x] archive_note.dart
 
 #### Riverpod Provider 설정
-- [ ] note_provider.dart
-  - [ ] 메모 목록 상태
-  - [ ] CRUD 액션
-  - [ ] 필터링 로직
-- [ ] folder_provider.dart
-- [ ] tag_provider.dart
+- [x] note_provider.dart
+  - [x] 메모 목록 상태
+  - [x] CRUD 액션
+  - [x] 필터링 로직
+- [ ] folder_provider.dart (Week 6에서 구현 예정)
+- [ ] tag_provider.dart (Week 6에서 구현 예정)
 
 #### 리치 텍스트 에디터 (Flutter Quill)
-- [ ] QuillController 설정
-- [ ] 에디터 툴바 커스터마이징
-  - [ ] Bold, Italic, Underline
-  - [ ] 헤딩, 리스트
-  - [ ] 링크, 이미지
-  - [ ] 코드 블록
-- [ ] 자동 저장 기능 (디바운스 3초)
-- [ ] 실행 취소/재실행
+- [x] QuillController 설정
+- [x] 에디터 툴바 커스터마이징
+  - [x] Bold, Italic, Underline
+  - [x] 헤딩, 리스트
+  - [x] 링크, 이미지
+  - [x] 코드 블록
+- [x] 자동 저장 기능 (디바운스 3초)
+- [x] 실행 취소/재실행
 
 #### 마크다운 에디터
-- [ ] 마크다운 입력 필드
-- [ ] 실시간 미리보기 (Split View)
-- [ ] 문법 하이라이팅
-- [ ] GFM (GitHub Flavored Markdown) 지원
-- [ ] 마크다운 툴바
+- [x] 마크다운 입력 필드
+- [x] 실시간 미리보기 (Split View)
+- [x] 문법 하이라이팅
+- [x] GFM (GitHub Flavored Markdown) 지원
+- [x] 마크다운 툴바
 
 #### 체크리스트 에디터
-- [ ] ReorderableListView 구현
-- [ ] 체크박스 토글 기능
-- [ ] 드래그 앤 드롭 재정렬
-- [ ] 진행률 인디케이터
-- [ ] 서브 태스크 지원
-- [ ] 완료 애니메이션
+- [x] ReorderableListView 구현
+- [x] 체크박스 토글 기능
+- [x] 드래그 앤 드롭 재정렬
+- [x] 진행률 인디케이터
+- [ ] 서브 태스크 지원 (추후 구현)
+- [ ] 완료 애니메이션 (추후 구현)
 
 #### 메모 에디터 페이지
-- [ ] note_editor_page.dart
-- [ ] 타입별 에디터 전환 (Rich Text/Markdown/Checklist)
-- [ ] 제목 입력 필드
-- [ ] 이미지 삽입 기능
-- [ ] 저장/취소 버튼
-- [ ] 자동 저장 인디케이터
+- [x] note_editor_screen.dart
+- [x] 타입별 에디터 전환 (Rich Text/Markdown/Checklist)
+- [x] 제목 입력 필드
+- [ ] 이미지 삽입 기능 (추후 구현)
+- [x] 저장/취소 버튼
+- [x] 자동 저장 인디케이터
 
 ---
 
@@ -647,7 +647,7 @@
 ---
 
 **작성일**: 2025-01-27
-**최종 업데이트**: 2025-01-27 (Phase 1 Week 1 완료)
+**최종 업데이트**: 2025-03-03 (Phase 2 Week 4-5 완료)
 **작성자**: Claude Code
 
 > 💡 **Tip**: 각 작업을 완료할 때마다 체크박스를 체크하여 진행 상황을 추적하세요!

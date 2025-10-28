@@ -6,6 +6,7 @@ import '../screens/home/notes_screen.dart';
 import '../screens/home/folders_screen.dart';
 import '../screens/home/tags_screen.dart';
 import '../screens/home/settings_screen.dart';
+import '../screens/note_editor/note_editor_screen.dart';
 
 /// 앱 라우터 설정
 final appRouter = GoRouter(
@@ -65,16 +66,22 @@ final appRouter = GoRouter(
       ],
     ),
 
-    // TODO: Week 4-5에서 추가할 라우트
-    // Note Editor
-    // GoRoute(
-    //   path: '/note/:id',
-    //   builder: (context, state) {
-    //     final id = state.pathParameters['id']!;
-    //     return NoteEditorScreen(noteId: id);
-    //   },
-    // ),
+    // Note Editor - 새 메모
+    GoRoute(
+      path: '/note/new',
+      builder: (context, state) => const NoteEditorScreen(noteId: null),
+    ),
 
+    // Note Editor - 기존 메모 편집
+    GoRoute(
+      path: '/note/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return NoteEditorScreen(noteId: id);
+      },
+    ),
+
+    // TODO: Week 7-8에서 추가할 라우트
     // Search Screen
     // GoRoute(
     //   path: '/search',
