@@ -6,7 +6,7 @@ import '../screens/home/notes_screen.dart';
 import '../screens/home/folders_screen.dart';
 import '../screens/home/tags_screen.dart';
 import '../screens/home/settings_screen.dart';
-import '../screens/note_editor/note_editor_screen.dart';
+import '../screens/note_editor/note_editor_screen_simple.dart';
 
 /// 앱 라우터 설정
 final appRouter = GoRouter(
@@ -69,7 +69,7 @@ final appRouter = GoRouter(
     // Note Editor - 새 메모
     GoRoute(
       path: '/note/new',
-      builder: (context, state) => const NoteEditorScreen(noteId: null),
+      builder: (context, state) => const NoteEditorScreenSimple(noteId: null),
     ),
 
     // Note Editor - 기존 메모 편집
@@ -77,7 +77,7 @@ final appRouter = GoRouter(
       path: '/note/:id',
       builder: (context, state) {
         final id = state.pathParameters['id']!;
-        return NoteEditorScreen(noteId: id);
+        return NoteEditorScreenSimple(noteId: id);
       },
     ),
 
