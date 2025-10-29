@@ -1,5 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import '../../../domain/entities/note.dart';
 
 /// 메모 카드 위젯
@@ -23,10 +24,28 @@ class NoteCard extends StatelessWidget {
     this.onDelete,
   });
 
+  /// 체크리스트 완료도 가져오기
+  (int completed, int total) _getChecklistProgress() {
+    if (note.type != NoteType.checklist || note.content.isEmpty) {
+      return (0, 0);
+    }
+
+    try {
+      final List<dynamic> items = jsonDecode(note.content);
+      final completed = items.where((item) => item['isCompleted'] == true).length;
+      return (completed, items.length);
+    } catch (e) {
+      return (0, 0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateFormat = DateFormat('yyyy-MM-dd HH:mm');
+    final (completedCount, totalCount) = _getChecklistProgress();
+
+    // timeago 한국어 설정
+    timeago.setLocaleMessages('ko', timeago.KoMessages());
 
     return Card(
       elevation: 1,
@@ -40,7 +59,7 @@ class NoteCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 상단: 제목 + 아이콘
+              // 상단: 제목 + 핀/삭제 아이콘
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -56,25 +75,33 @@ class NoteCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // 고정/즐겨찾기 아이콘
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (note.isPinned)
-                        Icon(
-                          Icons.push_pin,
-                          size: 16,
-                          color: theme.colorScheme.primary,
-                        ),
-                      if (note.isFavorite) ...[
-                        if (note.isPinned) const SizedBox(width: 4),
-                        Icon(
-                          Icons.star,
-                          size: 16,
-                          color: theme.colorScheme.secondary,
-                        ),
-                      ],
-                    ],
+                  // 핀 아이콘 버튼
+                  InkWell(
+                    onTap: onPin,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        note.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                        size: 20,
+                        color: note.isPinned
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                  // 삭제 아이콘 버튼
+                  InkWell(
+                    onTap: onDelete,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -91,63 +118,72 @@ class NoteCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              // 하단: 타입 + 날짜 + 태그
+              // 체크리스트 완료도
+              if (note.type == NoteType.checklist && totalCount > 0) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$completedCount/$totalCount 완료',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+              // 태그 표시
+              if (note.tags.isNotEmpty) ...[
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: note.tags.map((tag) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '#${tag.name}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+              ],
+              // 하단: 날짜
               Row(
                 children: [
-                  // 메모 타입 아이콘
-                  _buildTypeIcon(theme),
-                  const SizedBox(width: 8),
-                  // 날짜
+                  Icon(
+                    Icons.access_time,
+                    size: 14,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(width: 4),
                   Text(
-                    dateFormat.format(note.updatedAt),
+                    timeago.format(note.updatedAt, locale: 'ko'),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
-                  const Spacer(),
-                  // 태그 개수
-                  if (note.tags.isNotEmpty) ...[
-                    Icon(
-                      Icons.label_outline,
-                      size: 14,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${note.tags.length}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  /// 메모 타입별 아이콘
-  Widget _buildTypeIcon(ThemeData theme) {
-    IconData iconData;
-    switch (note.type) {
-      case NoteType.richText:
-        iconData = Icons.text_fields;
-        break;
-      case NoteType.markdown:
-        iconData = Icons.code;
-        break;
-      case NoteType.checklist:
-        iconData = Icons.checklist;
-        break;
-    }
-
-    return Icon(
-      iconData,
-      size: 16,
-      color: theme.colorScheme.primary.withValues(alpha: 0.7),
     );
   }
 }
