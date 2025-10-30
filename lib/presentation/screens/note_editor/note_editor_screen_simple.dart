@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../domain/entities/note.dart';
+import '../../../domain/entities/folder.dart';
+import '../../../domain/entities/tag.dart';
 import '../../providers/note_provider.dart';
 import '../../widgets/dialogs/folder_selection_dialog.dart';
+import '../../widgets/tag/tag_input_field.dart';
 
 /// 체크리스트 아이템 모델
 class ChecklistItem {
@@ -51,18 +54,16 @@ class _NoteEditorScreenSimpleState
     extends ConsumerState<NoteEditorScreenSimple> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  final _tagInputController = TextEditingController();
   final _checklistInputController = TextEditingController();
 
   // FocusNode for maintaining focus
-  final _tagFocusNode = FocusNode();
   final _checklistFocusNode = FocusNode();
 
   bool _isLoading = false;
   bool _hasChanges = false;
   List<ChecklistItem> _checklistItems = []; // 체크리스트 항목
-  List<String> _selectedTags = []; // 선택된 태그 이름 목록
-  String _selectedFolder = '모든 메모'; // 선택된 폴더
+  List<Tag> _selectedTags = []; // 선택된 태그 목록
+  Folder? _selectedFolder; // 선택된 폴더
 
   // 자동 저장
   Timer? _autoSaveTimer;
@@ -82,9 +83,7 @@ class _NoteEditorScreenSimpleState
     _autoSaveTimer?.cancel();
     _titleController.dispose();
     _contentController.dispose();
-    _tagInputController.dispose();
     _checklistInputController.dispose();
-    _tagFocusNode.dispose();
     _checklistFocusNode.dispose();
     super.dispose();
   }
@@ -115,7 +114,10 @@ class _NoteEditorScreenSimpleState
         }
 
         // 태그 로드
-        _selectedTags = note.tags.map((tag) => tag.name).toList();
+        _selectedTags = note.tags;
+
+        // 폴더 로드
+        _selectedFolder = note.folder;
 
         setState(() => _isLoading = false);
       }
@@ -165,6 +167,8 @@ class _NoteEditorScreenSimpleState
           title: title,
           content: content,
           type: NoteType.checklist,
+          folder: _selectedFolder,
+          tags: _selectedTags,
           updatedAt: DateTime.now(),
         );
         await ref.read(noteListProvider.notifier).updateNote(updatedNote);
@@ -205,6 +209,8 @@ class _NoteEditorScreenSimpleState
           title: title,
           content: content,
           type: NoteType.checklist,
+          folder: _selectedFolder,
+          tags: _selectedTags,
         );
         await ref.read(noteListProvider.notifier).createNote(note);
       } else {
@@ -215,6 +221,8 @@ class _NoteEditorScreenSimpleState
             title: title,
             content: content,
             type: NoteType.checklist,
+            folder: _selectedFolder,
+            tags: _selectedTags,
             updatedAt: DateTime.now(),
           );
           await ref.read(noteListProvider.notifier).updateNote(updatedNote);
@@ -391,16 +399,18 @@ class _NoteEditorScreenSimpleState
         const SizedBox(height: 12),
         InkWell(
           onTap: () async {
-            final result = await showDialog<String>(
+            final result = await showDialog<Folder?>(
               context: context,
-              builder: (context) => const FolderSelectionDialog(),
+              builder: (context) => FolderSelectionDialog(
+                selectedFolderId: _selectedFolder?.id,
+              ),
             );
-            if (result != null) {
-              setState(() {
-                _selectedFolder = result;
-                _onContentChanged();
-              });
-            }
+            // result can be null (if dialog was cancelled) or a Folder object
+            // If user selected "모든 메모", result will be null
+            setState(() {
+              _selectedFolder = result;
+              _onContentChanged();
+            });
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -421,7 +431,7 @@ class _NoteEditorScreenSimpleState
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  _selectedFolder,
+                  _selectedFolder?.name ?? '모든 메모',
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const Spacer(),
@@ -452,66 +462,15 @@ class _NoteEditorScreenSimpleState
               ),
         ),
         const SizedBox(height: 12),
-        // 태그 목록
-        if (_selectedTags.isNotEmpty) ...[
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _selectedTags.map((tag) {
-              return Chip(
-                label: Text('#$tag'),
-                backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                labelStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  fontWeight: FontWeight.w500,
-                ),
-                deleteIcon: Icon(
-                  Icons.close,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSecondaryContainer,
-                ),
-                onDeleted: () {
-                  setState(() {
-                    _selectedTags.remove(tag);
-                    _onContentChanged();
-                  });
-                },
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-        ],
-        // 태그 추가 입력
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                key: const ValueKey('tag_input'),
-                controller: _tagInputController,
-                focusNode: _tagFocusNode,
-                textInputAction: TextInputAction.done,
-                decoration: InputDecoration(
-                  hintText: '태그 추가',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                onSubmitted: (value) => _addTag(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: _addTag,
-              icon: const Icon(Icons.add),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                padding: const EdgeInsets.all(14),
-              ),
-            ),
-          ],
+        // 태그 입력 필드 (자동완성 포함)
+        TagInputField(
+          selectedTags: _selectedTags,
+          onTagsChanged: (tags) {
+            setState(() {
+              _selectedTags = tags;
+              _onContentChanged();
+            });
+          },
         ),
       ],
     );
@@ -638,20 +597,6 @@ class _NoteEditorScreenSimpleState
         ),
       ),
     );
-  }
-
-  /// 태그 추가
-  void _addTag() {
-    final tag = _tagInputController.text.trim();
-    if (tag.isNotEmpty && !_selectedTags.contains(tag)) {
-      setState(() {
-        _selectedTags.add(tag);
-        _tagInputController.clear();
-        _onContentChanged();
-      });
-      // focus 유지
-      _tagFocusNode.requestFocus();
-    }
   }
 
   /// 체크리스트 항목 추가 (입력창에서)

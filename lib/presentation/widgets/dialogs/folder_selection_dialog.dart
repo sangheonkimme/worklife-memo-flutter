@@ -1,17 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../domain/entities/folder.dart';
+import '../../providers/folder_provider.dart';
 
 /// 폴더 선택 다이얼로그
-class FolderSelectionDialog extends StatefulWidget {
-  const FolderSelectionDialog({super.key});
+class FolderSelectionDialog extends ConsumerStatefulWidget {
+  /// 현재 선택된 폴더 ID (nullable)
+  final String? selectedFolderId;
+
+  const FolderSelectionDialog({
+    super.key,
+    this.selectedFolderId,
+  });
 
   @override
-  State<FolderSelectionDialog> createState() => _FolderSelectionDialogState();
+  ConsumerState<FolderSelectionDialog> createState() => _FolderSelectionDialogState();
 }
 
-class _FolderSelectionDialogState extends State<FolderSelectionDialog> {
-  String _selectedFolder = '모든 메모';
+class _FolderSelectionDialogState extends ConsumerState<FolderSelectionDialog> {
+  String? _selectedFolderId;
   final _folderNameController = TextEditingController();
   int _selectedColorIndex = 0;
+  bool _isCreating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFolderId = widget.selectedFolderId;
+  }
 
   // 사용 가능한 색상들
   final List<Color> _availableColors = [
@@ -31,6 +47,8 @@ class _FolderSelectionDialogState extends State<FolderSelectionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final foldersAsync = ref.watch(folderListProvider);
+
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
@@ -59,11 +77,44 @@ class _FolderSelectionDialogState extends State<FolderSelectionDialog> {
               ],
             ),
             const SizedBox(height: 24),
-            // 기본 폴더 옵션
+            // 기본 폴더 옵션 (모든 메모)
             _buildFolderOption(
+              folder: null,
               folderName: '모든 메모',
               icon: Icons.inbox,
-              isSelected: _selectedFolder == '모든 메모',
+              isSelected: _selectedFolderId == null,
+            ),
+            const SizedBox(height: 16),
+            // 폴더 목록
+            Expanded(
+              child: foldersAsync.when(
+                data: (folders) {
+                  if (folders.isEmpty) {
+                    return const Center(
+                      child: Text('폴더가 없습니다'),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: folders.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final folder = folders[index];
+                      return _buildFolderOption(
+                        folder: folder,
+                        folderName: folder.name,
+                        icon: Icons.folder,
+                        isSelected: _selectedFolderId == folder.id,
+                        color: folder.color != null
+                            ? Color(int.parse(folder.color!, radix: 16))
+                            : null,
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(child: Text('오류: $error')),
+              ),
             ),
             const SizedBox(height: 24),
             const Divider(),
@@ -160,16 +211,18 @@ class _FolderSelectionDialogState extends State<FolderSelectionDialog> {
 
   /// 폴더 옵션 위젯
   Widget _buildFolderOption({
+    required Folder? folder,
     required String folderName,
     required IconData icon,
     required bool isSelected,
+    Color? color,
   }) {
     return InkWell(
       onTap: () {
         setState(() {
-          _selectedFolder = folderName;
+          _selectedFolderId = folder?.id;
         });
-        Navigator.pop(context, folderName);
+        Navigator.pop(context, folder);
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -215,7 +268,7 @@ class _FolderSelectionDialogState extends State<FolderSelectionDialog> {
   }
 
   /// 폴더 생성
-  void _createFolder() {
+  Future<void> _createFolder() async {
     final folderName = _folderNameController.text.trim();
     if (folderName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -224,12 +277,52 @@ class _FolderSelectionDialogState extends State<FolderSelectionDialog> {
       return;
     }
 
-    // TODO: 실제 폴더 생성 로직 (Week 6에서 구현)
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('폴더 "$folderName" 생성 기능은 Week 6에서 구현됩니다')),
-    );
+    setState(() {
+      _isCreating = true;
+    });
 
-    // 임시로 폴더 이름을 반환
-    Navigator.pop(context, folderName);
+    try {
+      // 선택된 색상을 HEX 문자열로 변환
+      final selectedColor = _availableColors[_selectedColorIndex];
+      final colorHex = selectedColor.toARGB32().toRadixString(16).padLeft(8, '0');
+
+      // 폴더 생성
+      final folder = FolderX.create(
+        name: folderName,
+        color: colorHex,
+      );
+
+      await ref.read(folderListProvider.notifier).createFolder(folder);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('폴더 "$folderName"이(가) 생성되었습니다')),
+        );
+
+        // 생성된 폴더로 선택하고 다이얼로그 닫기
+        // 폴더 목록을 다시 불러온 후 방금 생성된 폴더를 찾아서 반환
+        final folders = await ref.refresh(folderListProvider.future);
+        final createdFolder = folders.firstWhere(
+          (f) => f.name == folderName,
+          orElse: () => folders.last,
+        );
+
+        if (mounted) {
+          Navigator.pop(context, createdFolder);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('폴더 생성 실패: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreating = false;
+        });
+      }
+    }
   }
 }

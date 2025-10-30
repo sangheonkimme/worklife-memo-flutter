@@ -2,9 +2,9 @@
 
 **프로젝트 기간**: 14주
 **시작일**: 2025-01-27
-**상태**: Phase 2 Week 4-5 완료 ✅ (진행 중)
+**상태**: Phase 2 Week 6 거의 완료 ✅ (폴더 & 태그 시스템 핵심 기능 완료)
 **개발 전략**: 오프라인 우선 (Offline-First) → API 연동
-**완료된 Week**: 5/14
+**완료된 Week**: 5.5/14
 
 ---
 
@@ -195,35 +195,45 @@
 ### Week 6: 폴더 및 태그 시스템
 
 #### 폴더 기능 (로컬 전용)
-- [ ] 폴더 UseCase
-  - [ ] create_folder.dart
-  - [ ] update_folder.dart
-  - [ ] delete_folder.dart
-  - [ ] move_folder.dart
+- [x] 폴더 UseCase
+  - [x] create_folder.dart
+  - [x] update_folder.dart
+  - [x] delete_folder.dart
+  - [x] move_folder.dart
+  - [x] rename_folder.dart
+  - [x] get_folders.dart
+  - [x] get_folder_by_id.dart
+- [x] 폴더 Provider 구현 (folder_provider.dart)
 - [ ] 폴더 트리 구조 구현
   - [ ] TreeView 위젯
   - [ ] 계층 구조 (최대 3단계)
   - [ ] 확장/축소 애니메이션
-- [ ] 폴더 CRUD UI
-  - [ ] 폴더 생성 다이얼로그
+- [x] 폴더 CRUD UI
+  - [x] 폴더 생성 다이얼로그
   - [ ] 폴더 이름 변경
   - [ ] 폴더 삭제 확인
   - [ ] 폴더 이동
-- [ ] 메모를 폴더로 이동
-- [ ] 폴더별 메모 필터링
+- [x] 메모를 폴더로 이동 (note_editor에서 구현)
+- [x] 폴더별 메모 필터링 (notes_screen에서 구현)
 
 #### 태그 시스템 (로컬 전용)
-- [ ] 태그 UseCase
-  - [ ] create_tag.dart
-  - [ ] get_tags.dart
-  - [ ] search_tags.dart (로컬 자동완성)
-- [ ] 태그 입력 위젯 (ChipsInput)
-- [ ] 태그 자동완성 (로컬 DB 검색)
-  - [ ] 디바운스 처리
-- [ ] 태그 색상 관리
-- [ ] 태그 칩 위젯
-- [ ] 태그별 필터링
-- [ ] 인기 태그 표시 (사용 빈도)
+- [x] 태그 UseCase
+  - [x] create_tag.dart
+  - [x] get_tags.dart
+  - [x] get_tag_by_id.dart
+  - [x] search_tags.dart (로컬 자동완성)
+  - [x] update_tag.dart
+  - [x] delete_tag.dart
+- [x] 태그 Provider 구현 (tag_provider.dart)
+- [x] 태그 입력 위젯 (TagInputField)
+- [x] 태그 자동완성 (로컬 DB 검색)
+  - [x] 디바운스 처리
+- [x] 태그 색상 관리
+- [x] 태그 칩 위젯 (TagChip, TagChipList)
+- [x] 태그별 필터링 (notes_screen에서 구현)
+- [x] 태그 통합 (note_editor에서 구현)
+- [ ] 인기 태그 표시 위젯 (추후 구현)
+- [ ] 태그 관리 화면 (추후 구현)
 
 #### 폴더/태그 UI
 - [ ] 폴더 트리 사이드바

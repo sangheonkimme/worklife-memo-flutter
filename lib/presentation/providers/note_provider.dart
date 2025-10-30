@@ -16,12 +16,12 @@ part 'note_provider.g.dart';
 /// 활성 메모 목록을 관리하고 CRUD 작업을 수행합니다.
 @riverpod
 class NoteList extends _$NoteList {
-  late final GetActiveNotes _getActiveNotes;
-  late final CreateNote _createNote;
-  late final UpdateNote _updateNote;
-  late final DeleteNote _deleteNote;
-  late final PinNote _pinNote;
-  late final ArchiveNote _archiveNote;
+  late GetActiveNotes _getActiveNotes;
+  late CreateNote _createNote;
+  late UpdateNote _updateNote;
+  late DeleteNote _deleteNote;
+  late PinNote _pinNote;
+  late ArchiveNote _archiveNote;
 
   @override
   Future<List<Note>> build() async {

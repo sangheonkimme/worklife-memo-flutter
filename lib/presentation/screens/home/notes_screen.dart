@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/note_provider.dart';
+import '../../providers/folder_provider.dart';
+import '../../providers/tag_provider.dart';
 import '../../widgets/common/app_empty_widget.dart';
 import '../../widgets/common/app_loading_indicator.dart';
 import '../../widgets/common/app_error_widget.dart';
@@ -18,6 +20,8 @@ class NotesScreen extends ConsumerStatefulWidget {
 
 class _NotesScreenState extends ConsumerState<NotesScreen> {
   final _searchController = TextEditingController();
+  String? _selectedFolderId; // null means "all notes"
+  String? _selectedTagId; // null means "no tag filter"
 
   @override
   void dispose() {
@@ -27,7 +31,18 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final notesAsync = ref.watch(noteListProvider);
+    // Load folders for filter chips
+    final foldersAsync = ref.watch(folderListProvider);
+
+    // Load tags for filter chips
+    final tagsAsync = ref.watch(tagListProvider);
+
+    // Load notes based on selected folder and tag
+    final notesAsync = _selectedTagId != null
+        ? ref.watch(notesByTagProvider(_selectedTagId!))
+        : _selectedFolderId == null
+            ? ref.watch(noteListProvider)
+            : ref.watch(notesByFolderProvider(_selectedFolderId!));
 
     return Scaffold(
       body: notesAsync.when(
@@ -77,11 +92,18 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        // 모든 메모 보기 (현재 기본 동작)
+                        setState(() {
+                          _selectedFolderId = null;
+                          _selectedTagId = null;
+                        });
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                        backgroundColor: _selectedFolderId == null && _selectedTagId == null
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        foregroundColor: _selectedFolderId == null && _selectedTagId == null
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -90,6 +112,120 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                       child: const Text('모든 메모'),
                     ),
                   ),
+                ),
+                // Folder filter chips
+                foldersAsync.when(
+                  data: (folders) {
+                    if (folders.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '폴더',
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: folders.map((folder) {
+                                final isSelected = _selectedFolderId == folder.id &&
+                                    _selectedTagId == null;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: FilterChip(
+                                    label: Text(folder.name),
+                                    selected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        _selectedFolderId = selected ? folder.id : null;
+                                        _selectedTagId = null; // Clear tag filter
+                                      });
+                                    },
+                                    avatar: Icon(
+                                      Icons.folder,
+                                      size: 18,
+                                      color: isSelected
+                                          ? Theme.of(context).colorScheme.onSecondaryContainer
+                                          : Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
+                // Tag filter chips
+                tagsAsync.when(
+                  data: (tags) {
+                    if (tags.isEmpty) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '태그',
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: tags.map((tag) {
+                                final isSelected = _selectedTagId == tag.id;
+                                final tagColor = Color(int.parse(tag.color, radix: 16));
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: FilterChip(
+                                    label: Text(tag.name),
+                                    selected: isSelected,
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        _selectedTagId = selected ? tag.id : null;
+                                        _selectedFolderId = null; // Clear folder filter
+                                      });
+                                    },
+                                    backgroundColor: tagColor.withValues(alpha: 0.2),
+                                    selectedColor: tagColor.withValues(alpha: 0.4),
+                                    labelStyle: TextStyle(
+                                      color: isSelected ? tagColor : tagColor.withValues(alpha: 0.8),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    avatar: Icon(
+                                      Icons.label,
+                                      size: 18,
+                                      color: tagColor,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
                 ),
                 // 메모 리스트
                 Expanded(
