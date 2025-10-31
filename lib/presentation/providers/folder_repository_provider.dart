@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../data/datasources/local/folder_local_datasource.dart';
 import '../../data/repositories/folder_repository_impl.dart';
 import '../../domain/repositories/folder_repository.dart';
+import 'app_database_provider.dart';
 
 part 'folder_repository_provider.g.dart';
 
@@ -10,7 +11,8 @@ part 'folder_repository_provider.g.dart';
 /// FolderLocalDataSource 싱글톤 인스턴스를 제공합니다.
 @riverpod
 FolderLocalDataSource folderLocalDataSource(FolderLocalDataSourceRef ref) {
-  return FolderLocalDataSource();
+  final database = ref.watch(appDatabaseProvider);
+  return FolderLocalDataSource(database);
 }
 
 /// FolderRepository Provider

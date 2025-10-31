@@ -7,7 +7,7 @@ part of 'folder_repository_provider.dart';
 // **************************************************************************
 
 String _$folderLocalDataSourceHash() =>
-    r'd87d092252219bd15cac04b84f6cca8ddf87171d';
+    r'24f9a8ab510e5bc58902cb3cb10af795f2be4b02';
 
 /// FolderLocalDataSource Provider
 ///

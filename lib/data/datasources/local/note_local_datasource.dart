@@ -1,406 +1,340 @@
 import 'package:uuid/uuid.dart';
+import 'package:drift/drift.dart';
 import '../../../domain/entities/note.dart' as domain;
-import '../../../domain/entities/folder.dart';
-import '../../../domain/entities/tag.dart';
-import 'isar_database.dart';
-import 'entities/note_entity.dart' as entity;
-import 'entities/folder_entity.dart';
-import 'entities/tag_entity.dart';
-import 'package:isar/isar.dart';
+import '../../../domain/entities/folder.dart' as domain_folder;
+import '../../../domain/entities/tag.dart' as domain_tag;
+import 'drift/app_database.dart';
+import 'drift/tables.dart';
 
 /// 메모 Local Data Source
 class NoteLocalDataSource {
+  final AppDatabase _database;
   final Uuid _uuid = const Uuid();
+
+  NoteLocalDataSource(this._database);
 
   /// 메모 생성
   Future<domain.Note> createNote(domain.Note note) async {
-    final isar = await IsarDatabase.getInstance();
     final uuid = _uuid.v4();
+    final now = DateTime.now();
 
-    final noteEntity = entity.NoteEntity.create(
-      uuid: uuid,
-      title: note.title,
-      content: note.content,
-      type: _mapNoteTypeToEntity(note.type),
-      isPinned: note.isPinned,
-      isArchived: note.isArchived,
-      isDeleted: note.isDeleted,
-      isFavorite: note.isFavorite,
-      order: note.order,
-    );
-
-    await isar.writeTxn(() async {
-      await isar.noteEntitys.put(noteEntity);
-
-      // 폴더 연결
+    return await _database.transaction(() async {
+      // 폴더 ID 조회
+      int? folderDbId;
       if (note.folder != null) {
-        final folderEntity = await isar.folderEntitys
-            .filter()
-            .uuidEqualTo(note.folder!.id)
-            .findFirst();
-        if (folderEntity != null) {
-          noteEntity.folder.value = folderEntity;
-          await noteEntity.folder.save();
-        }
+        final folder = await _database.getFolderByUuid(note.folder!.id);
+        folderDbId = folder?.id;
       }
+
+      // 메모 삽입
+      final noteId = await _database.insertNote(
+        NotesCompanion.insert(
+          uuid: uuid,
+          title: note.title,
+          content: note.content,
+          type: _mapNoteTypeToTable(note.type),
+          createdAt: now,
+          updatedAt: now,
+          isPinned: Value(note.isPinned),
+          isArchived: Value(note.isArchived),
+          isDeleted: Value(note.isDeleted),
+          isFavorite: Value(note.isFavorite),
+          order: Value(note.order),
+          folderId: Value(folderDbId),
+        ),
+      );
 
       // 태그 연결
       if (note.tags.isNotEmpty) {
-        final tagEntities = await isar.tagEntitys
-            .filter()
-            .anyOf(note.tags, (q, tag) => q.uuidEqualTo(tag.id))
-            .findAll();
-        noteEntity.tags.addAll(tagEntities);
-        await noteEntity.tags.save();
+        for (final tag in note.tags) {
+          final tagEntity = await _database.getTagByUuid(tag.id);
+          if (tagEntity != null) {
+            await _database.linkNoteToTag(noteId, tagEntity.id);
 
-        // 태그 사용 횟수 증가
-        for (final tagEntity in tagEntities) {
-          tagEntity.useCount++;
-          tagEntity.updatedAt = DateTime.now();
-          await isar.tagEntitys.put(tagEntity);
+            // 태그 사용 횟수 증가
+            await _database.updateTag(tagEntity.copyWith(
+              useCount: tagEntity.useCount + 1,
+              updatedAt: now,
+            ));
+          }
         }
       }
-    });
 
-    return _mapToNote(noteEntity);
+      final created = await getNoteById(uuid);
+      if (created == null) throw Exception('Failed to create note');
+      return created;
+    });
   }
 
   /// 메모 조회
   Future<domain.Note?> getNoteById(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final noteEntity = await isar.noteEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final noteEntity = await _database.getNoteByUuid(id);
     if (noteEntity == null) return null;
 
-    await noteEntity.folder.load();
-    await noteEntity.tags.load();
+    final folder = noteEntity.folderId != null
+        ? await (_database.select(_database.folders)
+              ..where((f) => f.id.equals(noteEntity.folderId!)))
+            .getSingleOrNull()
+        : null;
 
-    return _mapToNote(noteEntity);
+    final tags = await _database.getTagsForNote(noteEntity.id);
+
+    return _mapToNote(noteEntity, folder, tags);
   }
 
   /// 모든 메모 조회
   Future<List<domain.Note>> getAllNotes() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys.where().findAll();
-
-    final notes = <domain.Note>[];
-    for (final noteEntity in entities) {
-      await noteEntity.folder.load();
-      await noteEntity.tags.load();
-      notes.add(_mapToNote(noteEntity));
-    }
-
-    return notes;
+    final notesList = await _database.getAllNotes();
+    return await _mapNotesWithRelations(notesList);
   }
 
   /// 활성 메모 조회
   Future<List<domain.Note>> getActiveNotes() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isDeletedEqualTo(false)
-        .and()
-        .isArchivedEqualTo(false)
-        .sortByUpdatedAtDesc()
-        .findAll();
-
-    return _mapToNotes(entities);
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.isDeleted.equals(false) & n.isArchived.equals(false))
+          ..orderBy([(n) => OrderingTerm.desc(n.updatedAt)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 고정된 메모 조회
   Future<List<domain.Note>> getPinnedNotes() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isPinnedEqualTo(true)
-        .and()
-        .isDeletedEqualTo(false)
-        .sortByOrderDesc()
-        .findAll();
-
-    return _mapToNotes(entities);
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.isPinned.equals(true) & n.isDeleted.equals(false))
+          ..orderBy([(n) => OrderingTerm.desc(n.order)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 보관된 메모 조회
   Future<List<domain.Note>> getArchivedNotes() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isArchivedEqualTo(true)
-        .and()
-        .isDeletedEqualTo(false)
-        .sortByUpdatedAtDesc()
-        .findAll();
-
-    return _mapToNotes(entities);
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.isArchived.equals(true) & n.isDeleted.equals(false))
+          ..orderBy([(n) => OrderingTerm.desc(n.updatedAt)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 삭제된 메모 조회
   Future<List<domain.Note>> getDeletedNotes() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isDeletedEqualTo(true)
-        .sortByUpdatedAtDesc()
-        .findAll();
-
-    return _mapToNotes(entities);
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.isDeleted.equals(true))
+          ..orderBy([(n) => OrderingTerm.desc(n.updatedAt)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 즐겨찾기 메모 조회
   Future<List<domain.Note>> getFavoriteNotes() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isFavoriteEqualTo(true)
-        .and()
-        .isDeletedEqualTo(false)
-        .sortByUpdatedAtDesc()
-        .findAll();
-
-    return _mapToNotes(entities);
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.isFavorite.equals(true) & n.isDeleted.equals(false))
+          ..orderBy([(n) => OrderingTerm.desc(n.updatedAt)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 폴더별 메모 조회
   Future<List<domain.Note>> getNotesByFolder(String folderId) async {
-    final isar = await IsarDatabase.getInstance();
-    final folderEntity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(folderId)
-        .findFirst();
+    final folder = await _database.getFolderByUuid(folderId);
+    if (folder == null) return [];
 
-    if (folderEntity == null) return [];
-
-    await folderEntity.notes.load();
-    return _mapToNotes(folderEntity.notes.toList());
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.folderId.equals(folder.id)))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 태그별 메모 조회
   Future<List<domain.Note>> getNotesByTag(String tagId) async {
-    final isar = await IsarDatabase.getInstance();
-    final tagEntity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(tagId)
-        .findFirst();
+    final tag = await _database.getTagByUuid(tagId);
+    if (tag == null) return [];
 
-    if (tagEntity == null) return [];
-
-    await tagEntity.notes.load();
-    return _mapToNotes(tagEntity.notes.toList());
+    final notes = await _database.getNotesForTag(tag.id);
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 메모 검색
   Future<List<domain.Note>> searchNotes(String query) async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isDeletedEqualTo(false)
-        .and()
-        .group(
-          (q) => q
-              .titleContains(query, caseSensitive: false)
-              .or()
-              .contentContains(query, caseSensitive: false),
-        )
-        .sortByUpdatedAtDesc()
-        .findAll();
-
-    return _mapToNotes(entities);
+    final lowerQuery = '%${query.toLowerCase()}%';
+    final notes = await (_database.select(_database.notes)
+          ..where((n) =>
+              n.isDeleted.equals(false) &
+              (n.title.lower().like(lowerQuery) |
+                  n.content.lower().like(lowerQuery)))
+          ..orderBy([(n) => OrderingTerm.desc(n.updatedAt)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 메모 업데이트
   Future<domain.Note> updateNote(domain.Note note) async {
-    final isar = await IsarDatabase.getInstance();
-    final noteEntity = await isar.noteEntitys
-        .filter()
-        .uuidEqualTo(note.id)
-        .findFirst();
-
+    final noteEntity = await _database.getNoteByUuid(note.id);
     if (noteEntity == null) {
       throw Exception('Note not found: ${note.id}');
     }
 
-    noteEntity.title = note.title;
-    noteEntity.content = note.content;
-    noteEntity.type = _mapNoteTypeToEntity(note.type);
-    noteEntity.isPinned = note.isPinned;
-    noteEntity.isArchived = note.isArchived;
-    noteEntity.isDeleted = note.isDeleted;
-    noteEntity.isFavorite = note.isFavorite;
-    noteEntity.order = note.order;
-    noteEntity.updatedAt = DateTime.now();
+    return await _database.transaction(() async {
+      final now = DateTime.now();
 
-    await isar.writeTxn(() async {
-      await isar.noteEntitys.put(noteEntity);
-
-      // 폴더 업데이트
+      // 폴더 ID 조회
+      int? folderDbId;
       if (note.folder != null) {
-        final folderEntity = await isar.folderEntitys
-            .filter()
-            .uuidEqualTo(note.folder!.id)
-            .findFirst();
-        noteEntity.folder.value = folderEntity;
-      } else {
-        noteEntity.folder.value = null;
+        final folder = await _database.getFolderByUuid(note.folder!.id);
+        folderDbId = folder?.id;
       }
-      await noteEntity.folder.save();
 
-      // 태그 업데이트
-      await noteEntity.tags.load();
-      final oldTags = noteEntity.tags.toList();
-      noteEntity.tags.clear();
+      // 메모 업데이트
+      await _database.updateNote(noteEntity.copyWith(
+        title: note.title,
+        content: note.content,
+        type: _mapNoteTypeToTable(note.type),
+        isPinned: note.isPinned,
+        isArchived: note.isArchived,
+        isDeleted: note.isDeleted,
+        isFavorite: note.isFavorite,
+        order: Value(note.order),
+        folderId: Value(folderDbId),
+        updatedAt: now,
+      ));
 
-      if (note.tags.isNotEmpty) {
-        final newTagEntities = await isar.tagEntitys
-            .filter()
-            .anyOf(note.tags, (q, tag) => q.uuidEqualTo(tag.id))
-            .findAll();
-        noteEntity.tags.addAll(newTagEntities);
+      // 기존 태그 연결 조회
+      final oldTags = await _database.getTagsForNote(noteEntity.id);
+      final oldTagIds = oldTags.map((t) => t.id).toSet();
+      final newTagUuids = note.tags.map((t) => t.id).toSet();
 
-        // 태그 사용 횟수 업데이트
-        for (final oldTag in oldTags) {
-          if (!newTagEntities.any((t) => t.id == oldTag.id)) {
-            oldTag.useCount = oldTag.useCount > 0 ? oldTag.useCount - 1 : 0;
-            oldTag.updatedAt = DateTime.now();
-            await isar.tagEntitys.put(oldTag);
-          }
-        }
-
-        for (final newTag in newTagEntities) {
-          if (!oldTags.any((t) => t.id == newTag.id)) {
-            newTag.useCount++;
-            newTag.updatedAt = DateTime.now();
-            await isar.tagEntitys.put(newTag);
+      // 새로운 태그 처리
+      for (final tagUuid in newTagUuids) {
+        final tag = await _database.getTagByUuid(tagUuid);
+        if (tag != null) {
+          if (!oldTagIds.contains(tag.id)) {
+            // 새로 추가된 태그
+            await _database.linkNoteToTag(noteEntity.id, tag.id);
+            await _database.updateTag(tag.copyWith(
+              useCount: tag.useCount + 1,
+              updatedAt: now,
+            ));
           }
         }
       }
 
-      await noteEntity.tags.save();
+      // 제거된 태그 처리
+      for (final oldTag in oldTags) {
+        final oldTagUuid = oldTag.uuid;
+        if (!newTagUuids.contains(oldTagUuid)) {
+          await _database.unlinkNoteFromTag(noteEntity.id, oldTag.id);
+          await _database.updateTag(oldTag.copyWith(
+            useCount: oldTag.useCount > 0 ? oldTag.useCount - 1 : 0,
+            updatedAt: now,
+          ));
+        }
+      }
+
+      final updated = await getNoteById(note.id);
+      if (updated == null) throw Exception('Failed to update note');
+      return updated;
     });
-
-    await noteEntity.folder.load();
-    await noteEntity.tags.load();
-
-    return _mapToNote(noteEntity);
   }
 
   /// 메모 삭제 (휴지통으로 이동)
   Future<void> deleteNote(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final noteEntity = await isar.noteEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final noteEntity = await _database.getNoteByUuid(id);
     if (noteEntity == null) return;
 
-    noteEntity.isDeleted = true;
-    noteEntity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.noteEntitys.put(noteEntity);
-    });
+    await _database.updateNote(noteEntity.copyWith(
+      isDeleted: true,
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 메모 영구 삭제
   Future<void> permanentlyDeleteNote(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final noteEntity = await isar.noteEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final noteEntity = await _database.getNoteByUuid(id);
     if (noteEntity == null) return;
 
-    await isar.writeTxn(() async {
+    await _database.transaction(() async {
       // 태그 사용 횟수 감소
-      await noteEntity.tags.load();
-      for (final tag in noteEntity.tags) {
-        tag.useCount = tag.useCount > 0 ? tag.useCount - 1 : 0;
-        tag.updatedAt = DateTime.now();
-        await isar.tagEntitys.put(tag);
+      final tags = await _database.getTagsForNote(noteEntity.id);
+      final now = DateTime.now();
+      for (final tag in tags) {
+        await _database.updateTag(tag.copyWith(
+          useCount: tag.useCount > 0 ? tag.useCount - 1 : 0,
+          updatedAt: now,
+        ));
       }
 
-      await isar.noteEntitys.delete(noteEntity.id);
+      await _database.deleteNote(noteEntity.id);
     });
   }
 
   /// 메모 복원
   Future<void> restoreNote(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final noteEntity = await isar.noteEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final noteEntity = await _database.getNoteByUuid(id);
     if (noteEntity == null) return;
 
-    noteEntity.isDeleted = false;
-    noteEntity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.noteEntitys.put(noteEntity);
-    });
+    await _database.updateNote(noteEntity.copyWith(
+      isDeleted: false,
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 메모 고정/고정 해제
   Future<void> togglePinNote(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final noteEntity = await isar.noteEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final noteEntity = await _database.getNoteByUuid(id);
     if (noteEntity == null) return;
 
-    noteEntity.isPinned = !noteEntity.isPinned;
-    noteEntity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.noteEntitys.put(noteEntity);
-    });
+    await _database.updateNote(noteEntity.copyWith(
+      isPinned: !noteEntity.isPinned,
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 최근 메모 조회
   Future<List<domain.Note>> getRecentNotes({int limit = 10}) async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.noteEntitys
-        .filter()
-        .isDeletedEqualTo(false)
-        .sortByUpdatedAtDesc()
-        .limit(limit)
-        .findAll();
-
-    return _mapToNotes(entities);
+    final notes = await (_database.select(_database.notes)
+          ..where((n) => n.isDeleted.equals(false))
+          ..orderBy([(n) => OrderingTerm.desc(n.updatedAt)])
+          ..limit(limit))
+        .get();
+    return await _mapNotesWithRelations(notes);
   }
 
   /// 오늘 생성된 메모 조회
   Future<List<domain.Note>> getTodayNotes() async {
-    final isar = await IsarDatabase.getInstance();
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
 
-    final entities = await isar.noteEntitys
-        .filter()
-        .createdAtGreaterThan(startOfDay)
-        .and()
-        .isDeletedEqualTo(false)
-        .sortByCreatedAtDesc()
-        .findAll();
+    final notes = await (_database.select(_database.notes)
+          ..where((n) =>
+              n.createdAt.isBiggerThanValue(startOfDay) &
+              n.isDeleted.equals(false))
+          ..orderBy([(n) => OrderingTerm.desc(n.createdAt)]))
+        .get();
+    return await _mapNotesWithRelations(notes);
+  }
 
-    return _mapToNotes(entities);
+  /// 여러 메모를 관계와 함께 매핑
+  Future<List<domain.Note>> _mapNotesWithRelations(List<Note> notes) async {
+    final result = <domain.Note>[];
+    for (final noteEntity in notes) {
+      final folder = noteEntity.folderId != null
+          ? await (_database.select(_database.folders)
+                ..where((f) => f.id.equals(noteEntity.folderId!)))
+              .getSingleOrNull()
+          : null;
+
+      final tags = await _database.getTagsForNote(noteEntity.id);
+      result.add(_mapToNote(noteEntity, folder, tags));
+    }
+    return result;
   }
 
   /// Entity → Note 변환
-  domain.Note _mapToNote(entity.NoteEntity noteEntity) {
+  domain.Note _mapToNote(Note noteEntity, Folder? folder, List<Tag> tags) {
     return domain.Note(
       id: noteEntity.uuid,
       title: noteEntity.title,
       content: noteEntity.content,
-      type: _mapNoteTypeFromEntity(noteEntity.type),
+      type: _mapNoteTypeFromTable(noteEntity.type),
       createdAt: noteEntity.createdAt,
       updatedAt: noteEntity.updatedAt,
       isPinned: noteEntity.isPinned,
@@ -408,53 +342,38 @@ class NoteLocalDataSource {
       isDeleted: noteEntity.isDeleted,
       isFavorite: noteEntity.isFavorite,
       order: noteEntity.order,
-      folder: noteEntity.folder.value != null
-          ? _mapToFolder(noteEntity.folder.value!)
-          : null,
-      tags: noteEntity.tags.map(_mapToTag).toList(),
+      folder: folder != null ? _mapToFolder(folder) : null,
+      tags: tags.map(_mapToTag).toList(),
     );
   }
 
-  /// 여러 Entity → Note 변환
-  Future<List<domain.Note>> _mapToNotes(
-    List<entity.NoteEntity> entities,
-  ) async {
-    final notes = <domain.Note>[];
-    for (final noteEntity in entities) {
-      await noteEntity.folder.load();
-      await noteEntity.tags.load();
-      notes.add(_mapToNote(noteEntity));
-    }
-    return notes;
-  }
-
-  /// NoteType 변환: Domain → Entity
-  entity.NoteType _mapNoteTypeToEntity(domain.NoteType type) {
+  /// NoteType 변환: Domain → Table
+  NoteType _mapNoteTypeToTable(domain.NoteType type) {
     switch (type) {
       case domain.NoteType.richText:
-        return entity.NoteType.richText;
+        return NoteType.richText;
       case domain.NoteType.markdown:
-        return entity.NoteType.markdown;
+        return NoteType.markdown;
       case domain.NoteType.checklist:
-        return entity.NoteType.checklist;
+        return NoteType.checklist;
     }
   }
 
-  /// NoteType 변환: Entity → Domain
-  domain.NoteType _mapNoteTypeFromEntity(entity.NoteType type) {
+  /// NoteType 변환: Table → Domain
+  domain.NoteType _mapNoteTypeFromTable(NoteType type) {
     switch (type) {
-      case entity.NoteType.richText:
+      case NoteType.richText:
         return domain.NoteType.richText;
-      case entity.NoteType.markdown:
+      case NoteType.markdown:
         return domain.NoteType.markdown;
-      case entity.NoteType.checklist:
+      case NoteType.checklist:
         return domain.NoteType.checklist;
     }
   }
 
-  /// FolderEntity → Folder 변환 (helper)
-  Folder _mapToFolder(FolderEntity entity) {
-    return Folder(
+  /// Folder entity → Domain Folder 변환
+  domain_folder.Folder _mapToFolder(Folder entity) {
+    return domain_folder.Folder(
       id: entity.uuid,
       name: entity.name,
       color: entity.color,
@@ -466,9 +385,9 @@ class NoteLocalDataSource {
     );
   }
 
-  /// TagEntity → Tag 변환 (helper)
-  Tag _mapToTag(TagEntity entity) {
-    return Tag(
+  /// Tag entity → Domain Tag 변환
+  domain_tag.Tag _mapToTag(Tag entity) {
+    return domain_tag.Tag(
       id: entity.uuid,
       name: entity.name,
       color: entity.color,

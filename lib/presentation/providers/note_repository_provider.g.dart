@@ -7,7 +7,7 @@ part of 'note_repository_provider.dart';
 // **************************************************************************
 
 String _$noteLocalDataSourceHash() =>
-    r'b3d9b73ffaa8213396a00f9e89d136bb2263c4f3';
+    r'3ea1f757b7c7810a1d965c1666d4c7c055945756';
 
 /// NoteLocalDataSource Provider
 ///

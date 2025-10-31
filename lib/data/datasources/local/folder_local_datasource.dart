@@ -1,87 +1,79 @@
 import 'package:uuid/uuid.dart';
-import '../../../domain/entities/folder.dart';
-import 'isar_database.dart';
-import 'entities/note_entity.dart';
-import 'entities/folder_entity.dart';
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
+import '../../../domain/entities/folder.dart' as domain;
+import 'drift/app_database.dart';
 
 /// 폴더 Local Data Source
 class FolderLocalDataSource {
+  final AppDatabase _database;
   final Uuid _uuid = const Uuid();
 
-  /// 폴더 생성
-  Future<Folder> createFolder(Folder folder) async {
-    final isar = await IsarDatabase.getInstance();
-    final uuid = _uuid.v4();
+  FolderLocalDataSource(this._database);
 
-    final entity = FolderEntity.create(
-      uuid: uuid,
-      name: folder.name,
-      color: folder.color,
-      icon: folder.icon,
-      parentId: folder.parentId,
-      order: folder.order,
+  /// 폴더 생성
+  Future<domain.Folder> createFolder(domain.Folder folder) async {
+    final uuid = _uuid.v4();
+    final now = DateTime.now();
+
+    final id = await _database.insertFolder(
+      FoldersCompanion.insert(
+        uuid: uuid,
+        name: folder.name,
+        createdAt: now,
+        updatedAt: now,
+        parentId: Value(folder.parentId),
+        order: Value(folder.order),
+        color: Value(folder.color),
+        icon: Value(folder.icon),
+      ),
     );
 
-    await isar.writeTxn(() async {
-      await isar.folderEntitys.put(entity);
-    });
-
-    return _mapToFolder(entity);
+    final created = await (_database.select(_database.folders)
+          ..where((f) => f.id.equals(id)))
+        .getSingle();
+    return _mapToFolder(created);
   }
 
   /// 폴더 조회 (단일)
-  Future<Folder?> getFolderById(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+  Future<domain.Folder?> getFolderById(String id) async {
+    final entity = await _database.getFolderByUuid(id);
     if (entity == null) return null;
-
-    await entity.notes.load();
     return _mapToFolder(entity);
   }
 
   /// 모든 폴더 조회
-  Future<List<Folder>> getAllFolders() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.folderEntitys.where().sortByOrder().findAll();
-
+  Future<List<domain.Folder>> getAllFolders() async {
+    final entities = await (_database.select(_database.folders)
+          ..orderBy([(f) => OrderingTerm.asc(f.order)]))
+        .get();
     return entities.map(_mapToFolder).toList();
   }
 
   /// 루트 폴더 조회
-  Future<List<Folder>> getRootFolders() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.folderEntitys
-        .filter()
-        .parentIdIsNull()
-        .sortByOrder()
-        .findAll();
-
+  Future<List<domain.Folder>> getRootFolders() async {
+    final entities = await (_database.select(_database.folders)
+          ..where((f) => f.parentId.isNull())
+          ..orderBy([(f) => OrderingTerm.asc(f.order)]))
+        .get();
     return entities.map(_mapToFolder).toList();
   }
 
   /// 하위 폴더 조회
-  Future<List<Folder>> getSubFolders(String parentId) async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.folderEntitys
-        .filter()
-        .parentIdEqualTo(parentId)
-        .sortByOrder()
-        .findAll();
-
+  Future<List<domain.Folder>> getSubFolders(String parentId) async {
+    final entities = await (_database.select(_database.folders)
+          ..where((f) => f.parentId.equals(parentId))
+          ..orderBy([(f) => OrderingTerm.asc(f.order)]))
+        .get();
     return entities.map(_mapToFolder).toList();
   }
 
   /// 폴더 트리 조회 (계층 구조)
-  Future<Map<String, List<Folder>>> getFolderTree() async {
-    final isar = await IsarDatabase.getInstance();
-    final allFolders = await isar.folderEntitys.where().sortByOrder().findAll();
+  Future<Map<String, List<domain.Folder>>> getFolderTree() async {
+    final allFolders = await (_database.select(_database.folders)
+          ..orderBy([(f) => OrderingTerm.asc(f.order)]))
+        .get();
 
-    final tree = <String, List<Folder>>{};
+    final tree = <String, List<domain.Folder>>{};
 
     for (final entity in allFolders) {
       final folder = _mapToFolder(entity);
@@ -97,137 +89,112 @@ class FolderLocalDataSource {
   }
 
   /// 폴더 업데이트
-  Future<Folder> updateFolder(Folder folder) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(folder.id)
-        .findFirst();
-
+  Future<domain.Folder> updateFolder(domain.Folder folder) async {
+    final entity = await _database.getFolderByUuid(folder.id);
     if (entity == null) {
       throw Exception('Folder not found: ${folder.id}');
     }
 
-    entity.name = folder.name;
-    entity.color = folder.color;
-    entity.icon = folder.icon;
-    entity.parentId = folder.parentId;
-    entity.order = folder.order;
-    entity.updatedAt = DateTime.now();
+    await _database.updateFolder(entity.copyWith(
+      name: folder.name,
+      color: Value(folder.color),
+      icon: Value(folder.icon),
+      parentId: Value(folder.parentId),
+      order: folder.order,
+      updatedAt: DateTime.now(),
+    ));
 
-    await isar.writeTxn(() async {
-      await isar.folderEntitys.put(entity);
-    });
-
-    return _mapToFolder(entity);
+    final updated = await _database.getFolderByUuid(folder.id);
+    return _mapToFolder(updated!);
   }
 
   /// 폴더 삭제
   Future<void> deleteFolder(String id, {bool deleteNotes = false}) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final entity = await _database.getFolderByUuid(id);
     if (entity == null) return;
 
-    await isar.writeTxn(() async {
+    await _database.transaction(() async {
       if (deleteNotes) {
         // 폴더 내 모든 메모 삭제
-        await entity.notes.load();
-        for (final note in entity.notes) {
-          await isar.noteEntitys.delete(note.id);
+        final notes = await (_database.select(_database.notes)
+              ..where((n) => n.folderId.equals(entity.id)))
+            .get();
+        for (final note in notes) {
+          await _database.deleteNote(note.id);
         }
       } else {
         // 폴더 내 메모들의 폴더 연결 해제
-        await entity.notes.load();
-        for (final note in entity.notes) {
-          note.folder.value = null;
-          await note.folder.save();
+        final notes = await (_database.select(_database.notes)
+              ..where((n) => n.folderId.equals(entity.id)))
+            .get();
+        for (final note in notes) {
+          await _database.updateNote(note.copyWith(
+            folderId: const Value(null),
+          ));
         }
       }
 
       // 하위 폴더들의 부모 ID를 현재 폴더의 부모로 변경 (한 레벨 위로 이동)
-      final subFolders = await isar.folderEntitys
-          .filter()
-          .parentIdEqualTo(id)
-          .findAll();
+      final subFolders = await (_database.select(_database.folders)
+            ..where((f) => f.parentId.equals(entity.uuid)))
+          .get();
 
       for (final subFolder in subFolders) {
-        subFolder.parentId = entity.parentId;
-        await isar.folderEntitys.put(subFolder);
+        await _database.updateFolder(subFolder.copyWith(
+          parentId: Value(entity.parentId),
+        ));
       }
 
-      await isar.folderEntitys.delete(entity.id);
+      await _database.deleteFolder(entity.id);
     });
   }
 
   /// 폴더 이동 (부모 폴더 변경)
   Future<void> moveFolder(String folderId, String? newParentId) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(folderId)
-        .findFirst();
-
+    final entity = await _database.getFolderByUuid(folderId);
     if (entity == null) return;
 
     // 순환 참조 방지: newParentId가 현재 폴더의 하위 폴더인지 확인
     if (newParentId != null) {
-      final isDescendant = await _isDescendant(isar, folderId, newParentId);
+      final isDescendant = await _isDescendant(folderId, newParentId);
       if (isDescendant) {
         throw Exception('Cannot move folder to its own descendant');
       }
 
       // 깊이 제한 확인 (최대 3레벨)
-      final depth = await _getFolderDepth(isar, newParentId);
+      final depth = await _getFolderDepth(newParentId);
       if (depth >= 2) {
         throw Exception('Maximum folder depth (3 levels) exceeded');
       }
     }
 
-    entity.parentId = newParentId;
-    entity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.folderEntitys.put(entity);
-    });
+    await _database.updateFolder(entity.copyWith(
+      parentId: Value(newParentId),
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 폴더 이름 변경
   Future<void> renameFolder(String id, String newName) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(id)
-        .findFirst();
-
+    final entity = await _database.getFolderByUuid(id);
     if (entity == null) return;
 
-    entity.name = newName;
-    entity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.folderEntitys.put(entity);
-    });
+    await _database.updateFolder(entity.copyWith(
+      name: newName,
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 폴더 순서 변경
   Future<void> reorderFolders(List<String> folderIds) async {
-    final isar = await IsarDatabase.getInstance();
-
-    await isar.writeTxn(() async {
+    await _database.transaction(() async {
       for (int i = 0; i < folderIds.length; i++) {
-        final entity = await isar.folderEntitys
-            .filter()
-            .uuidEqualTo(folderIds[i])
-            .findFirst();
-
+        final entity = await _database.getFolderByUuid(folderIds[i]);
         if (entity != null) {
-          entity.order = i;
-          entity.updatedAt = DateTime.now();
-          await isar.folderEntitys.put(entity);
+          await _database.updateFolder(entity.copyWith(
+            order: i,
+            updatedAt: DateTime.now(),
+          ));
         }
       }
     });
@@ -235,32 +202,25 @@ class FolderLocalDataSource {
 
   /// 폴더 내 메모 개수 조회
   Future<int> getNoteCountInFolder(String folderId) async {
-    final isar = await IsarDatabase.getInstance();
-    final folderEntity = await isar.folderEntitys
-        .filter()
-        .uuidEqualTo(folderId)
-        .findFirst();
-
+    final folderEntity = await _database.getFolderByUuid(folderId);
     if (folderEntity == null) return 0;
 
-    await folderEntity.notes.load();
+    final count = await (_database.selectOnly(_database.notes)
+          ..addColumns([_database.notes.id.count()])
+          ..where(_database.notes.folderId.equals(folderEntity.id) &
+              _database.notes.isDeleted.equals(false)))
+        .getSingle();
 
-    // 삭제되지 않은 메모만 카운트
-    return folderEntity.notes.where((note) => !note.isDeleted).length;
+    return count.read(_database.notes.id.count()) ?? 0;
   }
 
   /// 폴더 경로 조회 (부모 폴더들의 체인)
-  Future<List<Folder>> getFolderPath(String folderId) async {
-    final isar = await IsarDatabase.getInstance();
-    final path = <Folder>[];
-
+  Future<List<domain.Folder>> getFolderPath(String folderId) async {
+    final path = <domain.Folder>[];
     String? currentId = folderId;
-    while (currentId != null) {
-      final entity = await isar.folderEntitys
-          .filter()
-          .uuidEqualTo(currentId)
-          .findFirst();
 
+    while (currentId != null) {
+      final entity = await _database.getFolderByUuid(currentId);
       if (entity == null) break;
 
       path.insert(0, _mapToFolder(entity));
@@ -272,26 +232,20 @@ class FolderLocalDataSource {
 
   /// 폴더 개수 조회
   Future<int> getFolderCount() async {
-    final isar = await IsarDatabase.getInstance();
-    return await isar.folderEntitys.count();
+    final count = await (_database.selectOnly(_database.folders)
+          ..addColumns([_database.folders.id.count()]))
+        .getSingle();
+    return count.read(_database.folders.id.count()) ?? 0;
   }
 
   /// 하위 폴더 여부 확인 (순환 참조 방지용)
-  Future<bool> _isDescendant(
-    Isar isar,
-    String ancestorId,
-    String descendantId,
-  ) async {
+  Future<bool> _isDescendant(String ancestorId, String descendantId) async {
     String? currentId = descendantId;
 
     while (currentId != null) {
       if (currentId == ancestorId) return true;
 
-      final entity = await isar.folderEntitys
-          .filter()
-          .uuidEqualTo(currentId)
-          .findFirst();
-
+      final entity = await _database.getFolderByUuid(currentId);
       if (entity == null) break;
       currentId = entity.parentId;
     }
@@ -300,16 +254,12 @@ class FolderLocalDataSource {
   }
 
   /// 폴더 깊이 계산
-  Future<int> _getFolderDepth(Isar isar, String folderId) async {
+  Future<int> _getFolderDepth(String folderId) async {
     int depth = 0;
     String? currentId = folderId;
 
     while (currentId != null) {
-      final entity = await isar.folderEntitys
-          .filter()
-          .uuidEqualTo(currentId)
-          .findFirst();
-
+      final entity = await _database.getFolderByUuid(currentId);
       if (entity == null) break;
 
       depth++;
@@ -320,8 +270,8 @@ class FolderLocalDataSource {
   }
 
   /// Entity → Folder 변환
-  Folder _mapToFolder(FolderEntity entity) {
-    return Folder(
+  domain.Folder _mapToFolder(Folder entity) {
+    return domain.Folder(
       id: entity.uuid,
       name: entity.name,
       color: entity.color,

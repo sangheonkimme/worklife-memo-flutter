@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../data/datasources/local/note_local_datasource.dart';
 import '../../data/repositories/note_repository_impl.dart';
 import '../../domain/repositories/note_repository.dart';
+import 'app_database_provider.dart';
 
 part 'note_repository_provider.g.dart';
 
@@ -10,7 +11,8 @@ part 'note_repository_provider.g.dart';
 /// NoteLocalDataSource 싱글톤 인스턴스를 제공합니다.
 @riverpod
 NoteLocalDataSource noteLocalDataSource(NoteLocalDataSourceRef ref) {
-  return NoteLocalDataSource();
+  final database = ref.watch(appDatabaseProvider);
+  return NoteLocalDataSource(database);
 }
 
 /// NoteRepository Provider

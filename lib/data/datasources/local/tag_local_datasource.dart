@@ -1,271 +1,219 @@
 import 'package:uuid/uuid.dart';
-import '../../../domain/entities/tag.dart';
-import 'isar_database.dart';
-import 'entities/tag_entity.dart';
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
+import '../../../domain/entities/tag.dart' as domain;
+import 'drift/app_database.dart';
 
 /// 태그 Local Data Source
 class TagLocalDataSource {
+  final AppDatabase _database;
   final Uuid _uuid = const Uuid();
 
-  /// 태그 생성
-  Future<Tag> createTag(Tag tag) async {
-    final isar = await IsarDatabase.getInstance();
-    final uuid = _uuid.v4();
+  TagLocalDataSource(this._database);
 
-    final entity = TagEntity.create(
-      uuid: uuid,
-      name: tag.name,
-      color: tag.color,
+  /// 태그 생성
+  Future<domain.Tag> createTag(domain.Tag tag) async {
+    final uuid = _uuid.v4();
+    final now = DateTime.now();
+
+    final id = await _database.insertTag(
+      TagsCompanion.insert(
+        uuid: uuid,
+        name: tag.name,
+        color: tag.color,
+        createdAt: now,
+        updatedAt: now,
+      ),
     );
 
-    await isar.writeTxn(() async {
-      await isar.tagEntitys.put(entity);
-    });
-
-    return _mapToTag(entity);
+    final created = await (_database.select(_database.tags)
+          ..where((t) => t.id.equals(id)))
+        .getSingle();
+    return _mapToTag(created);
   }
 
   /// 태그 조회 (단일)
-  Future<Tag?> getTagById(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
-
+  Future<domain.Tag?> getTagById(String id) async {
+    final entity = await _database.getTagByUuid(id);
     if (entity == null) return null;
-
-    await entity.notes.load();
     return _mapToTag(entity);
   }
 
   /// 이름으로 태그 조회
-  Future<Tag?> getTagByName(String name) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys.filter().nameEqualTo(name).findFirst();
-
+  Future<domain.Tag?> getTagByName(String name) async {
+    final entity = await _database.getTagByName(name);
     if (entity == null) return null;
-
-    await entity.notes.load();
     return _mapToTag(entity);
   }
 
   /// 모든 태그 조회
-  Future<List<Tag>> getAllTags() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys.where().sortByName().findAll();
-
+  Future<List<domain.Tag>> getAllTags() async {
+    final entities = await (_database.select(_database.tags)
+          ..orderBy([(t) => OrderingTerm.asc(t.name)]))
+        .get();
     return entities.map(_mapToTag).toList();
   }
 
   /// 태그 검색 (자동완성용)
-  Future<List<Tag>> searchTags(String query) async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys
-        .filter()
-        .nameContains(query, caseSensitive: false)
-        .sortByUseCountDesc()
-        .findAll();
-
+  Future<List<domain.Tag>> searchTags(String query) async {
+    final lowerQuery = '%${query.toLowerCase()}%';
+    final entities = await (_database.select(_database.tags)
+          ..where((t) => t.name.lower().like(lowerQuery))
+          ..orderBy([(t) => OrderingTerm.desc(t.useCount)]))
+        .get();
     return entities.map(_mapToTag).toList();
   }
 
   /// 인기 태그 조회 (사용 횟수 기준)
-  Future<List<Tag>> getPopularTags({int limit = 10}) async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys
-        .where()
-        .sortByUseCountDesc()
-        .limit(limit)
-        .findAll();
-
+  Future<List<domain.Tag>> getPopularTags({int limit = 10}) async {
+    final entities = await (_database.select(_database.tags)
+          ..orderBy([(t) => OrderingTerm.desc(t.useCount)])
+          ..limit(limit))
+        .get();
     return entities.map(_mapToTag).toList();
   }
 
   /// 최근 사용한 태그 조회
-  Future<List<Tag>> getRecentTags({int limit = 10}) async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys
-        .filter()
-        .useCountGreaterThan(0)
-        .sortByUpdatedAtDesc()
-        .limit(limit)
-        .findAll();
-
+  Future<List<domain.Tag>> getRecentTags({int limit = 10}) async {
+    final entities = await (_database.select(_database.tags)
+          ..where((t) => t.useCount.isBiggerThanValue(0))
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])
+          ..limit(limit))
+        .get();
     return entities.map(_mapToTag).toList();
   }
 
   /// 태그 업데이트
-  Future<Tag> updateTag(Tag tag) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(tag.id)
-        .findFirst();
-
+  Future<domain.Tag> updateTag(domain.Tag tag) async {
+    final entity = await _database.getTagByUuid(tag.id);
     if (entity == null) {
       throw Exception('Tag not found: ${tag.id}');
     }
 
-    entity.name = tag.name;
-    entity.color = tag.color;
-    entity.useCount = tag.useCount;
-    entity.updatedAt = DateTime.now();
+    await _database.updateTag(entity.copyWith(
+      name: tag.name,
+      color: tag.color,
+      useCount: tag.useCount,
+      updatedAt: DateTime.now(),
+    ));
 
-    await isar.writeTxn(() async {
-      await isar.tagEntitys.put(entity);
-    });
-
-    return _mapToTag(entity);
+    final updated = await _database.getTagByUuid(tag.id);
+    return _mapToTag(updated!);
   }
 
   /// 태그 삭제
   Future<void> deleteTag(String id) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
-
+    final entity = await _database.getTagByUuid(id);
     if (entity == null) return;
 
-    await isar.writeTxn(() async {
-      // 연결된 메모들에서 태그 제거
-      await entity.notes.load();
-      for (final note in entity.notes) {
-        await note.tags.load();
-        note.tags.remove(entity);
-        await note.tags.save();
-      }
-
-      await isar.tagEntitys.delete(entity.id);
+    await _database.transaction(() async {
+      // NoteTags 연결 제거 (cascade delete가 자동으로 처리함)
+      await _database.deleteTag(entity.id);
     });
   }
 
   /// 태그 이름 변경
   Future<void> renameTag(String id, String newName) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
-
+    final entity = await _database.getTagByUuid(id);
     if (entity == null) return;
 
-    entity.name = newName;
-    entity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.tagEntitys.put(entity);
-    });
+    await _database.updateTag(entity.copyWith(
+      name: newName,
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 태그 색상 변경
   Future<void> changeTagColor(String id, String newColor) async {
-    final isar = await IsarDatabase.getInstance();
-    final entity = await isar.tagEntitys.filter().uuidEqualTo(id).findFirst();
-
+    final entity = await _database.getTagByUuid(id);
     if (entity == null) return;
 
-    entity.color = newColor;
-    entity.updatedAt = DateTime.now();
-
-    await isar.writeTxn(() async {
-      await isar.tagEntitys.put(entity);
-    });
+    await _database.updateTag(entity.copyWith(
+      color: newColor,
+      updatedAt: DateTime.now(),
+    ));
   }
 
   /// 태그 병합 (fromTagId의 메모들을 toTagId로 이동 후 fromTagId 삭제)
   Future<void> mergeTags(String fromTagId, String toTagId) async {
-    final isar = await IsarDatabase.getInstance();
-
-    final fromEntity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(fromTagId)
-        .findFirst();
-
-    final toEntity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(toTagId)
-        .findFirst();
+    final fromEntity = await _database.getTagByUuid(fromTagId);
+    final toEntity = await _database.getTagByUuid(toTagId);
 
     if (fromEntity == null || toEntity == null) {
       throw Exception('Tag not found');
     }
 
-    await isar.writeTxn(() async {
-      // fromTag의 모든 메모를 toTag로 연결
-      await fromEntity.notes.load();
-      await toEntity.notes.load();
+    await _database.transaction(() async {
+      // fromTag의 모든 메모 조회
+      final fromNotes = await _database.getNotesForTag(fromEntity.id);
 
-      for (final note in fromEntity.notes) {
-        await note.tags.load();
-
-        // 이미 toTag가 있는지 확인
-        final hasToTag = note.tags.any((t) => t.id == toEntity.id);
+      for (final note in fromNotes) {
+        // toTag가 이미 연결되어 있는지 확인
+        final toNotes = await _database.getNotesForTag(toEntity.id);
+        final hasToTag = toNotes.any((n) => n.id == note.id);
 
         if (!hasToTag) {
-          note.tags.add(toEntity);
-          toEntity.useCount++;
+          // toTag를 메모에 연결
+          await _database.linkNoteToTag(note.id, toEntity.id);
         }
 
-        // fromTag 제거
-        note.tags.remove(fromEntity);
-        await note.tags.save();
+        // fromTag 연결 제거
+        await _database.unlinkNoteFromTag(note.id, fromEntity.id);
       }
 
-      toEntity.updatedAt = DateTime.now();
-      await isar.tagEntitys.put(toEntity);
+      // toTag 사용 횟수 업데이트
+      await _database.updateTag(toEntity.copyWith(
+        useCount: toEntity.useCount + fromNotes.length,
+        updatedAt: DateTime.now(),
+      ));
 
       // fromTag 삭제
-      await isar.tagEntitys.delete(fromEntity.id);
+      await _database.deleteTag(fromEntity.id);
     });
   }
 
   /// 사용되지 않는 태그 조회
-  Future<List<Tag>> getUnusedTags() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys
-        .filter()
-        .useCountEqualTo(0)
-        .sortByNameDesc()
-        .findAll();
-
+  Future<List<domain.Tag>> getUnusedTags() async {
+    final entities = await (_database.select(_database.tags)
+          ..where((t) => t.useCount.equals(0))
+          ..orderBy([(t) => OrderingTerm.desc(t.name)]))
+        .get();
     return entities.map(_mapToTag).toList();
   }
 
   /// 사용되지 않는 태그 삭제
   Future<void> deleteUnusedTags() async {
-    final isar = await IsarDatabase.getInstance();
-    final entities = await isar.tagEntitys
-        .filter()
-        .useCountEqualTo(0)
-        .findAll();
+    final entities = await (_database.select(_database.tags)
+          ..where((t) => t.useCount.equals(0)))
+        .get();
 
-    await isar.writeTxn(() async {
+    await _database.transaction(() async {
       for (final entity in entities) {
-        await isar.tagEntitys.delete(entity.id);
+        await _database.deleteTag(entity.id);
       }
     });
   }
 
   /// 태그 개수 조회
   Future<int> getTagCount() async {
-    final isar = await IsarDatabase.getInstance();
-    return await isar.tagEntitys.count();
+    final count = await (_database.selectOnly(_database.tags)
+          ..addColumns([_database.tags.id.count()]))
+        .getSingle();
+    return count.read(_database.tags.id.count()) ?? 0;
   }
 
   /// 태그가 사용된 메모 개수 조회
   Future<int> getNoteCountWithTag(String tagId) async {
-    final isar = await IsarDatabase.getInstance();
-    final tagEntity = await isar.tagEntitys
-        .filter()
-        .uuidEqualTo(tagId)
-        .findFirst();
-
+    final tagEntity = await _database.getTagByUuid(tagId);
     if (tagEntity == null) return 0;
 
-    await tagEntity.notes.load();
-
+    final notes = await _database.getNotesForTag(tagEntity.id);
     // 삭제되지 않은 메모만 카운트
-    return tagEntity.notes.where((note) => !note.isDeleted).length;
+    return notes.where((note) => !note.isDeleted).length;
   }
 
   /// Entity → Tag 변환
-  Tag _mapToTag(TagEntity entity) {
-    return Tag(
+  domain.Tag _mapToTag(Tag entity) {
+    return domain.Tag(
       id: entity.uuid,
       name: entity.name,
       color: entity.color,

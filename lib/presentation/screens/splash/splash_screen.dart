@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../data/datasources/local/isar_database.dart';
 import '../../widgets/common/app_loading_indicator.dart';
 
 /// Splash Screen
@@ -21,8 +20,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initialize() async {
     try {
-      // Isar 데이터베이스 초기화
-      await IsarDatabase.getInstance();
+      // Drift 데이터베이스는 lazy initialization을 사용하므로 별도 초기화 불필요
 
       // 최소 로딩 시간 (스플래시 화면이 너무 빨리 사라지지 않도록)
       await Future.delayed(const Duration(milliseconds: 1500));

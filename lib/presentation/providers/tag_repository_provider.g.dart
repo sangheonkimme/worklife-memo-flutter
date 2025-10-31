@@ -7,7 +7,7 @@ part of 'tag_repository_provider.dart';
 // **************************************************************************
 
 String _$tagLocalDataSourceHash() =>
-    r'a76fa653f972551e2ba3d4aae59486d5e3ff6a5d';
+    r'1c6cf0b9781b01928adae948c35963776cf586bf';
 
 /// TagLocalDataSource Provider
 ///
