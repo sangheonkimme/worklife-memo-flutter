@@ -18,14 +18,7 @@ class NotesScreen extends ConsumerStatefulWidget {
 }
 
 class _NotesScreenState extends ConsumerState<NotesScreen> {
-  final _searchController = TextEditingController();
   String? _selectedFolderId; // null means "all notes"
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,27 +55,33 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                 // 검색 바
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Colors.grey[300]!,
-                        width: 1,
+                  child: InkWell(
+                    onTap: () {
+                      context.push('/search');
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.grey[300]!,
+                          width: 1,
+                        ),
                       ),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      decoration: const InputDecoration(
-                        hintText: '검색...',
-                        hintStyle: TextStyle(fontSize: 15),
-                        prefixIcon: Icon(Icons.search, size: 22),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.search, size: 22, color: Colors.grey),
+                          const SizedBox(width: 12),
+                          Text(
+                            '검색...',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
-                      onChanged: (value) {
-                        // TODO: 검색 구현 (Week 7)
-                      },
                     ),
                   ),
                 ),

@@ -7,6 +7,7 @@ import '../screens/home/folders_screen.dart';
 import '../screens/home/tags_screen.dart';
 import '../screens/home/settings_screen.dart';
 import '../screens/note_editor/note_editor_screen_simple.dart';
+import '../screens/search/search_screen.dart';
 
 /// 앱 라우터 설정
 final appRouter = GoRouter(
@@ -81,12 +82,11 @@ final appRouter = GoRouter(
       },
     ),
 
-    // TODO: Week 7-8에서 추가할 라우트
     // Search Screen
-    // GoRoute(
-    //   path: '/search',
-    //   builder: (context, state) => const SearchScreen(),
-    // ),
+    GoRoute(
+      path: '/search',
+      builder: (context, state) => const SearchScreen(),
+    ),
   ],
 
   // 에러 페이지
