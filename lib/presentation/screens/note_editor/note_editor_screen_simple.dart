@@ -8,7 +8,6 @@ import '../../../domain/entities/folder.dart';
 import '../../../domain/entities/tag.dart';
 import '../../providers/note_provider.dart';
 import '../../widgets/dialogs/folder_selection_dialog.dart';
-import '../../widgets/tag/tag_input_field.dart';
 
 /// 체크리스트 아이템 모델
 class ChecklistItem {
@@ -54,10 +53,8 @@ class _NoteEditorScreenSimpleState
     extends ConsumerState<NoteEditorScreenSimple> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
+  final _tagInputController = TextEditingController();
   final _checklistInputController = TextEditingController();
-
-  // FocusNode for maintaining focus
-  final _checklistFocusNode = FocusNode();
 
   bool _isLoading = false;
   bool _hasChanges = false;
@@ -83,8 +80,8 @@ class _NoteEditorScreenSimpleState
     _autoSaveTimer?.cancel();
     _titleController.dispose();
     _contentController.dispose();
+    _tagInputController.dispose();
     _checklistInputController.dispose();
-    _checklistFocusNode.dispose();
     super.dispose();
   }
 
@@ -98,19 +95,39 @@ class _NoteEditorScreenSimpleState
       final note = await ref.read(noteProvider(widget.noteId!).future);
       if (note != null && mounted) {
         _titleController.text = note.title;
-        _contentController.text = note.content;
 
         // 체크리스트 로드
         if (note.type == NoteType.checklist && note.content.isNotEmpty) {
           try {
-            final List<dynamic> jsonList = jsonDecode(note.content);
-            _checklistItems = jsonList
-                .map((item) =>
-                    ChecklistItem.fromJson(item as Map<String, dynamic>))
-                .toList();
+            // JSON 파싱 시도
+            final decoded = jsonDecode(note.content);
+
+            // 새로운 형식: {"text": "...", "checklist": [...]}
+            if (decoded is Map<String, dynamic>) {
+              _contentController.text = decoded['text'] ?? '';
+              final checklistData = decoded['checklist'] as List<dynamic>?;
+              if (checklistData != null) {
+                _checklistItems = checklistData
+                    .map((item) =>
+                        ChecklistItem.fromJson(item as Map<String, dynamic>))
+                    .toList();
+              }
+            }
+            // 기존 형식: [{"id": "...", "text": "...", "isCompleted": false}]
+            else if (decoded is List<dynamic>) {
+              _checklistItems = decoded
+                  .map((item) =>
+                      ChecklistItem.fromJson(item as Map<String, dynamic>))
+                  .toList();
+              _contentController.text = '';
+            }
           } catch (e) {
             _checklistItems = [];
+            _contentController.text = note.content;
           }
+        } else {
+          // 일반 노트인 경우 content 표시
+          _contentController.text = note.content;
         }
 
         // 태그 로드
@@ -156,9 +173,24 @@ class _NoteEditorScreenSimpleState
       final title = _titleController.text.trim();
       if (title.isEmpty) return;
 
-      // 체크리스트 content
-      final content =
-          jsonEncode(_checklistItems.map((item) => item.toJson()).toList());
+      final contentText = _contentController.text.trim();
+
+      // 체크리스트가 있으면 체크리스트 타입으로 저장
+      final hasChecklist = _checklistItems.isNotEmpty;
+      final noteType = hasChecklist ? NoteType.checklist : NoteType.richText;
+
+      // content 생성: 체크리스트와 텍스트를 모두 포함
+      String content;
+      if (hasChecklist) {
+        // 체크리스트와 텍스트를 함께 저장
+        content = jsonEncode({
+          'text': contentText,
+          'checklist': _checklistItems.map((item) => item.toJson()).toList(),
+        });
+      } else {
+        // 일반 텍스트만 저장
+        content = contentText;
+      }
 
       // 기존 메모 업데이트
       final existingNote = await ref.read(noteProvider(widget.noteId!).future);
@@ -166,7 +198,7 @@ class _NoteEditorScreenSimpleState
         final updatedNote = existingNote.copyWith(
           title: title,
           content: content,
-          type: NoteType.checklist,
+          type: noteType,
           folder: _selectedFolder,
           tags: _selectedTags,
           updatedAt: DateTime.now(),
@@ -188,14 +220,28 @@ class _NoteEditorScreenSimpleState
   /// 메모 저장
   Future<void> _saveNote() async {
     final title = _titleController.text.trim();
+    final contentText = _contentController.text.trim();
 
-    // 체크리스트를 JSON으로 저장
-    final content =
-        jsonEncode(_checklistItems.map((item) => item.toJson()).toList());
+    // 체크리스트가 있으면 체크리스트 타입으로 저장
+    final hasChecklist = _checklistItems.isNotEmpty;
+    final noteType = hasChecklist ? NoteType.checklist : NoteType.richText;
 
-    if (title.isEmpty && _checklistItems.isEmpty) {
+    // content 생성: 체크리스트와 텍스트를 모두 포함
+    String content;
+    if (hasChecklist) {
+      // 체크리스트와 텍스트를 함께 저장
+      content = jsonEncode({
+        'text': contentText,
+        'checklist': _checklistItems.map((item) => item.toJson()).toList(),
+      });
+    } else {
+      // 일반 텍스트만 저장
+      content = contentText;
+    }
+
+    if (title.isEmpty && contentText.isEmpty && !hasChecklist) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('제목 또는 체크리스트를 입력하세요')),
+        const SnackBar(content: Text('제목 또는 내용을 입력하세요')),
       );
       return;
     }
@@ -208,7 +254,7 @@ class _NoteEditorScreenSimpleState
         final note = NoteX.create(
           title: title,
           content: content,
-          type: NoteType.checklist,
+          type: noteType,
           folder: _selectedFolder,
           tags: _selectedTags,
         );
@@ -220,7 +266,7 @@ class _NoteEditorScreenSimpleState
           final updatedNote = existingNote.copyWith(
             title: title,
             content: content,
-            type: NoteType.checklist,
+            type: noteType,
             folder: _selectedFolder,
             tags: _selectedTags,
             updatedAt: DateTime.now(),
@@ -303,11 +349,21 @@ class _NoteEditorScreenSimpleState
             },
           ),
           actions: [
-            // 저장 버튼
-            IconButton(
-              icon: const Icon(Icons.check),
-              onPressed: _isLoading ? null : _saveNote,
-              tooltip: '저장',
+            // 저장 버튼 - 보라색 원형 배경
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF7C4DFF), // 보라색
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.check),
+                  color: Colors.white,
+                  onPressed: _isLoading ? null : _saveNote,
+                  tooltip: '저장',
+                ),
+              ),
             ),
           ],
         ),
@@ -325,48 +381,40 @@ class _NoteEditorScreenSimpleState
         // 스크롤 가능한 영역
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 제목 입력
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    hintText: '제목',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(
-                      hintText: '제목은 좀 달아볼까?',
-                      border: InputBorder.none,
-                    ),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 // 내용 입력
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
+                TextField(
+                  controller: _contentController,
+                  decoration: const InputDecoration(
+                    hintText: '내용을 입력하세요...',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: TextField(
-                    controller: _contentController,
-                    decoration: const InputDecoration(
-                      hintText: '내용 검색을 좀 해보자.',
-                      border: InputBorder.none,
-                    ),
-                    style: Theme.of(context).textTheme.bodyLarge,
-                    maxLines: null,
-                    minLines: 3,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.5,
                   ),
+                  maxLines: null,
+                  minLines: 5,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
                 // 폴더 섹션
                 _buildFolderSection(),
                 const SizedBox(height: 24),
@@ -379,8 +427,6 @@ class _NoteEditorScreenSimpleState
             ),
           ),
         ),
-        // 고정된 체크리스트 입력 영역
-        _buildFixedChecklistInput(),
       ],
     );
   }
@@ -390,11 +436,12 @@ class _NoteEditorScreenSimpleState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '폴더',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
         InkWell(
@@ -415,32 +462,22 @@ class _NoteEditorScreenSimpleState
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(context)
-                    .colorScheme
-                    .outline
-                    .withValues(alpha: 0.5),
-              ),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
               children: [
                 Icon(
                   Icons.folder_outlined,
+                  size: 20,
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(width: 12),
                 Text(
                   _selectedFolder?.name ?? '모든 메모',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const Spacer(),
-                Icon(
-                  Icons.chevron_right,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.5),
+                  style: const TextStyle(
+                    fontSize: 15,
+                  ),
                 ),
               ],
             ),
@@ -455,25 +492,127 @@ class _NoteEditorScreenSimpleState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '태그',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
-        // 태그 입력 필드 (자동완성 포함)
-        TagInputField(
-          selectedTags: _selectedTags,
-          onTagsChanged: (tags) {
-            setState(() {
-              _selectedTags = tags;
-              _onContentChanged();
-            });
-          },
+        // 선택된 태그들 표시
+        if (_selectedTags.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _selectedTags.map((tag) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '#${tag.name}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedTags.remove(tag);
+                          _onContentChanged();
+                        });
+                      },
+                      child: Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
+        // 태그 입력 필드
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _tagInputController,
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  hintText: '태그 추가',
+                  hintStyle: const TextStyle(fontSize: 15),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                ),
+                onSubmitted: (value) {
+                  _addTag(value);
+                  _tagInputController.clear();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                onPressed: () {
+                  _addTag(_tagInputController.text);
+                  _tagInputController.clear();
+                },
+                icon: const Icon(Icons.add, size: 20),
+                padding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  /// 태그 추가
+  void _addTag(String tagName) {
+    final trimmed = tagName.trim();
+    if (trimmed.isEmpty) return;
+
+    // 이미 추가된 태그인지 확인
+    final exists = _selectedTags.any((tag) => tag.name.toLowerCase() == trimmed.toLowerCase());
+    if (exists) return;
+
+    setState(() {
+      _selectedTags.add(Tag(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: trimmed,
+        color: '#9C27B0', // 기본 보라색
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
+      _onContentChanged();
+    });
   }
 
   /// 체크리스트 항목들 목록 (스크롤 영역)
@@ -481,28 +620,14 @@ class _NoteEditorScreenSimpleState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           '체크리스트',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
-        // 완료도 표시
-        if (_checklistItems.isNotEmpty) ...[
-          Row(
-            children: [
-              Text(
-                '${_checklistItems.where((item) => item.isCompleted).length}/${_checklistItems.length} 완료',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-        ],
         // 체크리스트 항목들
         if (_checklistItems.isNotEmpty) ...[
           ..._checklistItems.asMap().entries.map((entry) {
@@ -511,91 +636,99 @@ class _NoteEditorScreenSimpleState
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Checkbox(
-                    value: item.isCompleted,
-                    onChanged: (value) {
-                      setState(() {
-                        item.isCompleted = value ?? false;
-                        _onContentChanged();
-                      });
-                    },
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: item.isCompleted,
+                      onChanged: (value) {
+                        setState(() {
+                          item.isCompleted = value ?? false;
+                          _onContentChanged();
+                        });
+                      },
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       item.text.isEmpty ? '(항목 없음)' : item.text,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            decoration: item.isCompleted
-                                ? TextDecoration.lineThrough
-                                : TextDecoration.none,
-                          ),
+                      style: TextStyle(
+                        fontSize: 15,
+                        decoration: item.isCompleted
+                            ? TextDecoration.lineThrough
+                            : TextDecoration.none,
+                        color: item.isCompleted
+                            ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)
+                            : Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                     onPressed: () {
                       setState(() {
                         _checklistItems.removeAt(index);
                         _onContentChanged();
                       });
                     },
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(),
                   ),
                 ],
               ),
             );
           }),
+          const SizedBox(height: 8),
         ],
-      ],
-    );
-  }
-
-  /// 고정된 체크리스트 입력 영역 (하단 고정)
-  Widget _buildFixedChecklistInput() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
-        ),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: SafeArea(
-        top: false,
-        child: Row(
+        // 체크리스트 입력 필드
+        Row(
           children: [
             Expanded(
               child: TextField(
-                key: const ValueKey('checklist_input'),
                 controller: _checklistInputController,
-                focusNode: _checklistFocusNode,
                 textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
                   hintText: '항목 추가',
+                  hintStyle: const TextStyle(fontSize: 15),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
                 onSubmitted: (value) => _addChecklistItemFromInput(),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton(
-              onPressed: _addChecklistItemFromInput,
-              icon: const Icon(Icons.add),
-              style: IconButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                padding: const EdgeInsets.all(14),
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                onPressed: _addChecklistItemFromInput,
+                icon: const Icon(Icons.add, size: 20),
+                padding: const EdgeInsets.all(12),
               ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
@@ -611,8 +744,6 @@ class _NoteEditorScreenSimpleState
         _checklistInputController.clear();
         _onContentChanged();
       });
-      // focus 유지
-      _checklistFocusNode.requestFocus();
     }
   }
 }
